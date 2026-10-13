@@ -7,18 +7,20 @@ export interface Asset {
   spot: number
   vol: number // annualised implied vol used as ATM baseline
   color: string
+  logo: string
 }
 
+// Logos live in public/tokens. ETH uses the Robinhood Chain feather mark.
 // Robinhood Chain is home to tokenized equities, so Sherwood lists stock
 // derivatives next to crypto majors.
 export const ASSETS: Asset[] = [
-  { symbol: 'ETH', name: 'Ethereum', kind: 'crypto', spot: 3420, vol: 0.62, color: '#8c9eff' },
-  { symbol: 'BTC', name: 'Bitcoin', kind: 'crypto', spot: 104250, vol: 0.48, color: '#f7931a' },
-  { symbol: 'SOL', name: 'Solana', kind: 'crypto', spot: 182, vol: 0.78, color: '#14f195' },
-  { symbol: 'HOOD', name: 'Robinhood Markets', kind: 'stock', spot: 118.4, vol: 0.58, color: '#ccff00' },
-  { symbol: 'TSLA', name: 'Tesla', kind: 'stock', spot: 412.3, vol: 0.55, color: '#e82127' },
-  { symbol: 'NVDA', name: 'NVIDIA', kind: 'stock', spot: 186.7, vol: 0.46, color: '#76b900' },
-  { symbol: 'AAPL', name: 'Apple', kind: 'stock', spot: 247.1, vol: 0.27, color: '#a2aaad' },
+  { symbol: 'ETH', name: 'Ethereum', kind: 'crypto', spot: 3420, vol: 0.62, color: '#8c9eff', logo: 'tokens/eth.png' },
+  { symbol: 'BTC', name: 'Bitcoin', kind: 'crypto', spot: 104250, vol: 0.48, color: '#f7931a', logo: 'tokens/btc.svg' },
+  { symbol: 'SOL', name: 'Solana', kind: 'crypto', spot: 182, vol: 0.78, color: '#14f195', logo: 'tokens/sol.svg' },
+  { symbol: 'HOOD', name: 'Robinhood Markets', kind: 'stock', spot: 118.4, vol: 0.58, color: '#ccff00', logo: 'tokens/hood.svg' },
+  { symbol: 'TSLA', name: 'Tesla', kind: 'stock', spot: 412.3, vol: 0.55, color: '#e82127', logo: 'tokens/tsla.svg' },
+  { symbol: 'NVDA', name: 'NVIDIA', kind: 'stock', spot: 186.7, vol: 0.46, color: '#76b900', logo: 'tokens/nvda.svg' },
+  { symbol: 'AAPL', name: 'Apple', kind: 'stock', spot: 247.1, vol: 0.27, color: '#a2aaad', logo: 'tokens/aapl.svg' },
 ]
 
 export const assetBySymbol = (s: string) => ASSETS.find((a) => a.symbol === s) ?? ASSETS[0]

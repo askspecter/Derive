@@ -1,6 +1,7 @@
 import { Link } from 'react-router-dom'
 import { ASSETS, VAULTS } from '../config/markets'
-import { DEFAULT_CHAIN } from '../config/chains'
+import { ROBINHOOD_CHAIN } from '../config/chains'
+import { AssetIcon } from '../components/AssetIcon'
 import { useMarket } from '../lib/market'
 import { useWallet } from '../lib/wallet'
 import { Ticker } from '../components/Ticker'
@@ -50,7 +51,7 @@ export function Home() {
         <div className="hero-glow" />
         <div className="container hero-inner">
           <div className="pill">
-            <span className="dot" /> Live on {DEFAULT_CHAIN.name}
+            <span className="dot" /> Live on {ROBINHOOD_CHAIN.name} mainnet
           </div>
           <h1>
             The onchain derivatives
@@ -123,9 +124,7 @@ export function Home() {
                   <tr key={a.symbol}>
                     <td>
                       <div className="asset-cell">
-                        <span className="asset-icon" style={{ background: a.color }}>
-                          {a.symbol[0]}
-                        </span>
+                        <AssetIcon symbol={a.symbol} />
                         <div>
                           <b>{a.symbol}</b>
                           <div className="muted small">{a.name}</div>

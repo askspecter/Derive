@@ -1,6 +1,6 @@
 import { useMemo } from 'react'
 import { ASSETS, VAULTS } from '../config/markets'
-import { ROBINHOOD_MAINNET, ROBINHOOD_TESTNET } from '../config/chains'
+import { ROBINHOOD_CHAIN } from '../config/chains'
 import { compactUsd } from '../lib/format'
 
 function Bars({ data, label }: { data: number[]; label: string }) {
@@ -70,7 +70,7 @@ export function Stats() {
               </tr>
             </thead>
             <tbody>
-              {[ROBINHOOD_MAINNET, ROBINHOOD_TESTNET].map((c) => (
+              {[ROBINHOOD_CHAIN].map((c) => (
                 <tr key={c.id}>
                   <td>{c.name}</td>
                   <td className="mono">{c.id}</td>

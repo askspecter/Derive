@@ -117,7 +117,7 @@ input[type='range'] { padding: 0; accent-color: var(--accent); }
 
 .ticker { border-block: 1px solid var(--border); overflow: hidden; background: var(--bg-2); }
 .ticker-track { display: flex; gap: 40px; padding: 12px 0; width: max-content; animation: scroll 40s linear infinite; }
-.ticker-item { display: flex; gap: 10px; font-size: 14px; }
+.ticker-item { display: flex; align-items: center; gap: 8px; font-size: 14px; }
 @keyframes scroll { to { transform: translateX(-50%); } }
 
 .section { padding: 64px 16px 0; }
@@ -138,7 +138,7 @@ input[type='range'] { padding: 0; accent-color: var(--accent); }
 .table th.r, .table td.r { text-align: right; }
 .table th.c, .table td.c { text-align: center; }
 .asset-cell { display: flex; align-items: center; gap: 12px; }
-.asset-icon { width: 32px; height: 32px; border-radius: 50%; display: grid; place-items: center; font-weight: 800; color: #0b0f0c; flex-shrink: 0; }
+.asset-icon { border-radius: 50%; flex-shrink: 0; display: block; object-fit: cover; }
 
 /* vaults */
 .vault-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px; margin-top: 16px; }
@@ -162,7 +162,6 @@ input[type='range'] { padding: 0; accent-color: var(--accent); }
 .asset-tabs { display: flex; gap: 8px; overflow-x: auto; padding-bottom: 2px; scrollbar-width: none; }
 .asset-tab { display: flex; align-items: center; gap: 8px; background: var(--card); border: 1px solid var(--border); color: var(--text); border-radius: 12px; padding: 8px 12px; cursor: pointer; font: inherit; white-space: nowrap; }
 .asset-tab.active { border-color: var(--accent); background: rgba(204,255,0,.06); }
-.asset-dot { width: 10px; height: 10px; border-radius: 50%; }
 .asset-sym { font-weight: 700; }
 
 .trade-layout { display: grid; grid-template-columns: minmax(0, 1fr) 340px; gap: 16px; align-items: start; }

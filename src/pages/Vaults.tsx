@@ -2,6 +2,7 @@ import { useState } from 'react'
 import { VAULTS, assetBySymbol, type Vault } from '../config/markets'
 import { useAccount } from '../lib/account'
 import { vaultValue } from '../lib/valuation'
+import { AssetIcon } from '../components/AssetIcon'
 import { cls, compactUsd, pct, usd } from '../lib/format'
 
 function VaultCard({ v }: { v: Vault }) {
@@ -9,14 +10,11 @@ function VaultCard({ v }: { v: Vault }) {
   const [amount, setAmount] = useState('')
   const [msg, setMsg] = useState<{ ok: boolean; text: string } | null>(null)
   const pos = account.vaults.find((x) => x.vaultId === v.id)
-  const color = assetBySymbol(v.asset).color
 
   return (
     <div className="card vault">
       <div className="vault-top">
-        <span className="asset-icon" style={{ background: color }}>
-          {v.asset[0]}
-        </span>
+        <AssetIcon symbol={v.asset} size={36} />
         <span className={cls('tag', `risk-${v.risk.toLowerCase()}`)}>{v.risk} risk</span>
       </div>
       <div className="muted small">{v.strategy}</div>

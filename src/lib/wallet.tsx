@@ -1,5 +1,5 @@
 import { createContext, useCallback, useContext, useEffect, useState, type ReactNode } from 'react'
-import { DEFAULT_CHAIN, chainById, type ChainConfig } from '../config/chains'
+import { ROBINHOOD_CHAIN, isRobinhoodChain } from '../config/chains'
 
 interface Eip1193Provider {
   request(args: { method: string; params?: unknown[] }): Promise<unknown>
@@ -23,18 +23,18 @@ interface WalletState {
   onRobinhood: boolean
   connect(): Promise<void>
   disconnect(): void
-  switchChain(chain?: ChainConfig): Promise<void>
+  switchChain(): Promise<void>
 }
 
 const WalletContext = createContext<WalletState | null>(null)
 
-const addParams = (c: ChainConfig) => ({
-  chainId: c.hexId,
-  chainName: c.name,
-  nativeCurrency: c.nativeCurrency,
-  rpcUrls: [c.rpcUrl],
-  blockExplorerUrls: [c.explorerUrl],
-})
+const ADD_PARAMS = {
+  chainId: ROBINHOOD_CHAIN.hexId,
+  chainName: ROBINHOOD_CHAIN.name,
+  nativeCurrency: ROBINHOOD_CHAIN.nativeCurrency,
+  rpcUrls: [ROBINHOOD_CHAIN.rpcUrl],
+  blockExplorerUrls: [ROBINHOOD_CHAIN.explorerUrl],
+}
 
 export function WalletProvider({ children }: { children: ReactNode }) {
   const [address, setAddress] = useState<string | null>(null)
@@ -58,14 +58,14 @@ export function WalletProvider({ children }: { children: ReactNode }) {
   )
 
   const switchChain = useCallback(
-    async (chain: ChainConfig = DEFAULT_CHAIN) => {
+    async () => {
       if (!provider) return
       try {
-        await provider.request({ method: 'wallet_switchEthereumChain', params: [{ chainId: chain.hexId }] })
+        await provider.request({ method: 'wallet_switchEthereumChain', params: [{ chainId: ROBINHOOD_CHAIN.hexId }] })
       } catch (e: any) {
         // 4902: chain not yet added to the wallet.
         if (e?.code === 4902 || e?.data?.originalError?.code === 4902) {
-          await provider.request({ method: 'wallet_addEthereumChain', params: [addParams(chain)] })
+          await provider.request({ method: 'wallet_addEthereumChain', params: [ADD_PARAMS] })
         } else {
           setError(e?.message ?? 'Failed to switch network')
         }
@@ -86,7 +86,7 @@ export function WalletProvider({ children }: { children: ReactNode }) {
       setAddress(accounts[0] ?? null)
       const id = parseInt((await provider.request({ method: 'eth_chainId' })) as string, 16)
       setChainId(id)
-      if (!chainById(id)) await switchChain()
+      if (!isRobinhoodChain(id)) await switchChain()
     } catch (e: any) {
       setError(e?.message ?? 'Connection rejected')
     } finally {
@@ -134,7 +134,7 @@ export function WalletProvider({ children }: { children: ReactNode }) {
         connecting,
         error,
         hasProvider: !!provider,
-        onRobinhood: !!chainById(chainId),
+        onRobinhood: isRobinhoodChain(chainId),
         connect,
         disconnect,
         switchChain,

@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
-import { ROBINHOOD_MAINNET, ROBINHOOD_TESTNET, chainById } from '../config/chains'
+import { ROBINHOOD_CHAIN } from '../config/chains'
 import { shortAddr } from '../lib/format'
 import { useWallet } from '../lib/wallet'
 
@@ -27,7 +27,6 @@ export function WalletButton() {
     )
   }
 
-  const chain = chainById(w.chainId)
   return (
     <div className="wallet" ref={ref}>
       {!w.onRobinhood ? (
@@ -36,8 +35,8 @@ export function WalletButton() {
         </button>
       ) : (
         <button className="btn btn-ghost" onClick={() => setMenu((m) => !m)}>
-          <span className={chain?.testnet ? 'dot dot-warn' : 'dot'} />
-          <span className="hide-sm">{chain?.shortName}</span>
+          <span className="dot" />
+          <span className="hide-sm">Robinhood Chain</span>
           <span className="mono">{shortAddr(w.address)}</span>
         </button>
       )}
@@ -46,13 +45,9 @@ export function WalletButton() {
           <div className="dropdown-row muted">Balance</div>
           <div className="dropdown-row mono">{w.balance != null ? `${w.balance.toFixed(4)} ETH` : '—'}</div>
           <hr />
-          <button onClick={() => w.switchChain(ROBINHOOD_MAINNET)}>Use Robinhood Chain Mainnet</button>
-          <button onClick={() => w.switchChain(ROBINHOOD_TESTNET)}>Use Robinhood Chain Testnet</button>
-          {chain && (
-            <a href={`${chain.explorerUrl}/address/${w.address}`} target="_blank" rel="noreferrer">
-              View on explorer ↗
-            </a>
-          )}
+          <a href={`${ROBINHOOD_CHAIN.explorerUrl}/address/${w.address}`} target="_blank" rel="noreferrer">
+            View on explorer ↗
+          </a>
           <hr />
           <button
             onClick={() => {

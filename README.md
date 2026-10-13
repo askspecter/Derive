@@ -18,15 +18,21 @@ untuk kripto dan saham tertokenisasi.*
 - **Wallet**: EIP-1193 connect (Robinhood Wallet, MetaMask, …) with automatic switch/add of Robinhood Chain
 - Markets for crypto (ETH, BTC, SOL) and tokenized stocks (HOOD, TSLA, NVDA, AAPL)
 
-## Networks
+## Network
+
+Sherwood runs on **Robinhood Chain mainnet** only.
 
 | Network | Chain ID | RPC | Explorer |
 | --- | --- | --- | --- |
-| Robinhood Chain Mainnet | 4663 | https://rpc.mainnet.chain.robinhood.com | https://robinhoodchain.blockscout.com |
-| Robinhood Chain Testnet | 46630 | https://rpc.testnet.chain.robinhood.com | https://explorer.testnet.chain.robinhood.com |
+| Robinhood Chain | 4663 | https://rpc.mainnet.chain.robinhood.com | https://robinhoodchain.blockscout.com |
 
-The default network is testnet. Set `VITE_DEFAULT_NETWORK=mainnet` to default to mainnet.
 Chain config lives in `src/config/chains.ts`.
+
+## Asset logos
+
+Logos are bundled in `public/tokens`. ETH uses the Robinhood feather mark; BTC and SOL come from
+`cryptocurrency-icons`, and the stock logos (HOOD, TSLA, NVDA, AAPL) are the official marks from
+`simple-icons` on brand-coloured badges. Logos are trademarks of their respective owners.
 
 ## Status
 

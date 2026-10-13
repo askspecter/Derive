@@ -1,5 +1,5 @@
 import { Link } from 'react-router-dom'
-import { ROBINHOOD_MAINNET, ROBINHOOD_TESTNET } from '../config/chains'
+import { ROBINHOOD_CHAIN } from '../config/chains'
 import { Logo } from './Logo'
 
 export function Footer() {
@@ -24,11 +24,8 @@ export function Footer() {
         </div>
         <div>
           <h4>Network</h4>
-          <a href={ROBINHOOD_MAINNET.explorerUrl} target="_blank" rel="noreferrer">
-            Mainnet explorer
-          </a>
-          <a href={ROBINHOOD_TESTNET.explorerUrl} target="_blank" rel="noreferrer">
-            Testnet explorer
+          <a href={ROBINHOOD_CHAIN.explorerUrl} target="_blank" rel="noreferrer">
+            Block explorer
           </a>
           <a href="https://docs.robinhood.com/chain/connecting" target="_blank" rel="noreferrer">
             Robinhood Chain docs
