@@ -2,6 +2,7 @@ import { useState } from 'react'
 import { useConfig, useWriteContract } from 'wagmi'
 import { readContract, waitForTransactionReceipt } from 'wagmi/actions'
 import { useQueryClient } from '@tanstack/react-query'
+import { robinhood } from '@reown/appkit/networks'
 import { erc20Abi, BaseError, ContractFunctionRevertedError, type Address } from 'viem'
 
 export type TxStatus = { kind: 'idle' } | { kind: 'pending'; label: string } | { kind: 'done'; label: string } | { kind: 'error'; message: string }
@@ -56,7 +57,8 @@ export function useTx() {
 
   async function write(label: string, params: Parameters<typeof writeContractAsync>[0]) {
     setStatus({ kind: 'pending', label: `${label}: confirm in your wallet` })
-    const hash = await writeContractAsync(params)
+    // Pin every write to Robinhood Chain so nothing is ever sent to another network by mistake.
+    const hash = await writeContractAsync({ ...params, chainId: robinhood.id } as typeof params)
     setStatus({ kind: 'pending', label: `${label}: waiting for confirmation` })
     const receipt = await waitForTransactionReceipt(config, { hash })
     if (receipt.status !== 'success') throw new Error(`${label} failed onchain`)

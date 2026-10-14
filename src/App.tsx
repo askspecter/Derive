@@ -1,6 +1,7 @@
 import { useEffect } from 'react'
 import { HashRouter, Navigate, Route, Routes, useLocation } from 'react-router-dom'
 import { Header } from './components/Header'
+import { WrongNetwork } from './components/WrongNetwork'
 import { Footer } from './components/Footer'
 import { Home } from './pages/Home'
 import { Options } from './pages/Options'
@@ -26,6 +27,7 @@ export default function App() {
           <HashRouter>
             <ScrollTop />
             <Header />
+            <WrongNetwork />
             <main>
               <Routes>
                 <Route path="/" element={<Home />} />

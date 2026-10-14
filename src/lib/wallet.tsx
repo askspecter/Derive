@@ -1,9 +1,11 @@
-import { createContext, useContext, type ReactNode } from 'react'
+import { createContext, useContext, useState, type ReactNode } from 'react'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
-import { WagmiProvider, useBalance } from 'wagmi'
+import { WagmiProvider, useBalance, useSwitchChain } from 'wagmi'
 import { useAppKit, useAppKitAccount, useAppKitNetwork, useDisconnect } from '@reown/appkit/react'
 import { robinhood } from '@reown/appkit/networks'
 import { appKit, wagmiAdapter } from './reown'
+import { ROBINHOOD_CHAIN } from '../config/chains'
+import { errorMessage } from './tx'
 
 // Wallet connection runs through Reown AppKit. This context keeps the small
 // interface the rest of the app uses, so pages never touch AppKit directly.
@@ -14,6 +16,8 @@ interface WalletState {
   balance: number | null
   connecting: boolean
   onRobinhood: boolean
+  switching: boolean
+  switchError: string | null
   connect(): void
   openAccount(): void
   disconnect(): void
@@ -26,7 +30,10 @@ const queryClient = new QueryClient()
 function WalletBridge({ children }: { children: ReactNode }) {
   const { open } = useAppKit()
   const { address, isConnected, status } = useAppKitAccount()
-  const { chainId, switchNetwork } = useAppKitNetwork()
+  const { chainId } = useAppKitNetwork()
+  const { switchChainAsync } = useSwitchChain()
+  const [switching, setSwitching] = useState(false)
+  const [switchError, setSwitchError] = useState<string | null>(null)
   const { disconnect } = useDisconnect()
   const id = chainId == null ? null : Number(chainId)
   const { data: bal } = useBalance({
@@ -44,7 +51,28 @@ function WalletBridge({ children }: { children: ReactNode }) {
     connect: () => open({ view: 'Connect' }),
     openAccount: () => open({ view: 'Account' }),
     disconnect: () => disconnect(),
-    switchChain: () => switchNetwork(robinhood),
+    switching,
+    switchError,
+    switchChain: async () => {
+      setSwitching(true)
+      setSwitchError(null)
+      try {
+        // Asks the wallet to switch, and to add Robinhood Chain first if it doesn't know it.
+        await switchChainAsync({
+          chainId: robinhood.id,
+          addEthereumChainParameter: {
+            chainName: ROBINHOOD_CHAIN.name,
+            nativeCurrency: ROBINHOOD_CHAIN.nativeCurrency,
+            rpcUrls: [ROBINHOOD_CHAIN.rpcUrl],
+            blockExplorerUrls: [ROBINHOOD_CHAIN.explorerUrl],
+          },
+        })
+      } catch (e) {
+        setSwitchError(errorMessage(e))
+      } finally {
+        setSwitching(false)
+      }
+    },
   }
 
   return <WalletContext.Provider value={value}>{children}</WalletContext.Provider>

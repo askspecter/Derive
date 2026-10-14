@@ -30,12 +30,15 @@ export const appKit = createAppKit({
   networks,
   defaultNetwork: robinhood,
   projectId: projectId ?? 'missing-project-id',
-  allowUnsupportedChain: false,
+  // Don't lock the screen when the wallet is on another network: the site shows its own
+  // banner with a switch button and manual setup steps (some mobile wallets can't auto add chains).
+  allowUnsupportedChain: true,
+  chainImages: { [robinhood.id]: typeof window !== 'undefined' ? `${window.location.origin}/tokens/eth.png` : '' },
   customRpcUrls,
   metadata: {
     name: 'Larry',
     description: 'Take the edge back. Derivatives for everyone on Robinhood Chain.',
-    url: typeof window !== 'undefined' ? window.location.origin : 'https://larry.trade',
+    url: typeof window !== 'undefined' ? window.location.origin : 'https://www.larry.exchange',
     icons: [typeof window !== 'undefined' ? `${window.location.origin}/apple-touch-icon.png` : ''],
   },
   features: {

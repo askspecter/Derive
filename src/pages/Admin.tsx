@@ -2,6 +2,7 @@ import { useEffect, useState, type ReactNode } from 'react'
 import { useConfig, useDeployContract, useReadContract, useReadContracts, useTransactionCount } from 'wagmi'
 import { waitForTransactionReceipt } from 'wagmi/actions'
 import { erc20Abi, formatUnits, getAddress, getContractAddress, isAddress, parseUnits, zeroAddress, type Address } from 'viem'
+import { robinhood } from '@reown/appkit/networks'
 import { ASSETS } from '../config/markets'
 import { ADDRESSES, ADMIN, DEFAULT_COLLATERAL, DEPLOY_NONCE } from '../config/protocol'
 import { ROBINHOOD_CHAIN } from '../config/chains'
@@ -192,7 +193,7 @@ function DeploySteps({ deployer, addresses }: { deployer: Address; addresses: { 
           disabled={tx.busy || deployed.pool || !tokenSymbol || tokenDecimals == null}
           onClick={() =>
             deploy('Vault', DEPLOY_NONCE.pool, () =>
-              deployContractAsync({ abi: LarryPoolAbi, bytecode: LarryPoolBytecode, args: [collateral as Address, parseUnits(cap || '0', tokenDecimals!)] }),
+              deployContractAsync({ chainId: robinhood.id, abi: LarryPoolAbi, bytecode: LarryPoolBytecode, args: [collateral as Address, parseUnits(cap || '0', tokenDecimals!)] }),
             )
           }
         >
@@ -208,7 +209,7 @@ function DeploySteps({ deployer, addresses }: { deployer: Address; addresses: { 
         <button
           className="btn btn-accent"
           disabled={tx.busy || !deployed.pool || deployed.perps}
-          onClick={() => deploy('Perps', DEPLOY_NONCE.perps, () => deployContractAsync({ abi: LarryPerpsAbi, bytecode: LarryPerpsBytecode, args: [addresses.pool] }))}
+          onClick={() => deploy('Perps', DEPLOY_NONCE.perps, () => deployContractAsync({ chainId: robinhood.id, abi: LarryPerpsAbi, bytecode: LarryPerpsBytecode, args: [addresses.pool] }))}
         >
           Deploy perps
         </button>
@@ -222,7 +223,7 @@ function DeploySteps({ deployer, addresses }: { deployer: Address; addresses: { 
         <button
           className="btn btn-accent"
           disabled={tx.busy || !deployed.perps || deployed.options}
-          onClick={() => deploy('Options', DEPLOY_NONCE.options, () => deployContractAsync({ abi: LarryOptionsAbi, bytecode: LarryOptionsBytecode, args: [addresses.pool] }))}
+          onClick={() => deploy('Options', DEPLOY_NONCE.options, () => deployContractAsync({ chainId: robinhood.id, abi: LarryOptionsAbi, bytecode: LarryOptionsBytecode, args: [addresses.pool] }))}
         >
           Deploy options
         </button>

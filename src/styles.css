@@ -468,3 +468,19 @@ input[type='range'] { padding: 0; accent-color: var(--accent); border: 0; backgr
   .deploy-steps li { grid-template-columns: 30px 1fr; }
   .deploy-steps li > .btn { grid-column: 2; justify-self: start; }
 }
+
+/* wrong network banner */
+.wrong-network { border-bottom: 1px solid rgba(91, 252, 192, .3); background: rgba(91, 252, 192, .05); padding: 14px 0; }
+.wrong-inner { display: flex; justify-content: space-between; align-items: center; gap: 16px; flex-wrap: wrap; }
+.wrong-inner p { margin: 2px 0 0; }
+.wrong-actions { display: flex; gap: 8px; flex-wrap: wrap; }
+.wrong-manual { padding-top: 14px; }
+.wrong-manual p { margin: 0 0 10px; }
+.net-rows { display: flex; flex-direction: column; gap: 6px; margin-bottom: 10px; }
+.net-row { display: grid; grid-template-columns: 130px 1fr auto; gap: 12px; align-items: center; text-align: left; background: var(--card); border: 1px solid var(--border); border-radius: 10px; padding: 10px 12px; color: var(--text); font: inherit; cursor: pointer; }
+.net-row .mono { overflow-wrap: anywhere; font-size: 13px; }
+@media (max-width: 600px) {
+  .net-row { grid-template-columns: 1fr auto; }
+  .net-row > .muted { grid-column: 1 / -1; }
+  .wrong-actions, .wrong-actions .btn { width: 100%; }
+}
