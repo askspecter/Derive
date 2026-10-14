@@ -1,4 +1,4 @@
-# Sherwood — Derivatives on Robinhood Chain
+# Larry — Derivatives on Robinhood Chain
 
 A [Derive](https://www.derive.xyz/)-style onchain derivatives exchange frontend, built for
 [Robinhood Chain](https://docs.robinhood.com/chain/connecting), the Arbitrum Orbit L2 from Robinhood.
@@ -20,7 +20,7 @@ untuk kripto dan saham tertokenisasi.*
 
 ## Network
 
-Sherwood runs on **Robinhood Chain mainnet** only.
+Larry runs on **Robinhood Chain mainnet** only.
 
 | Network | Chain ID | RPC | Explorer |
 | --- | --- | --- | --- |
@@ -53,4 +53,4 @@ npm run preview
 The build is a static site (hash routing, relative base), so `dist/` can be hosted on Vercel, Netlify,
 GitHub Pages, IPFS, etc.
 
-Sherwood is an independent project and is not affiliated with Robinhood Markets, Inc.
+Larry is an independent project and is not affiliated with Robinhood Markets, Inc.

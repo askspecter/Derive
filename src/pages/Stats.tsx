@@ -32,7 +32,7 @@ export function Stats() {
       <div className="page-head">
         <div>
           <h1>Protocol stats</h1>
-          <p className="muted">Illustrative metrics for the Sherwood protocol on Robinhood Chain.</p>
+          <p className="muted">Illustrative metrics for the Larry protocol on Robinhood Chain.</p>
         </div>
       </div>
       <div className="stat-grid">

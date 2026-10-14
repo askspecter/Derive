@@ -190,7 +190,7 @@ export function Home() {
           <div>
             <h2>Trade where the stocks live.</h2>
             <p className="muted">
-              Robinhood Chain brings tokenized equities onchain. Sherwood brings the derivatives layer: hedge, lever up,
+              Robinhood Chain brings tokenized equities onchain. Larry brings the derivatives layer: hedge, lever up,
               or earn yield on them 24/7.
             </p>
           </div>

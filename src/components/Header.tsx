@@ -18,7 +18,7 @@ export function Header() {
       <div className="header-inner">
         <Link to="/" className="brand" onClick={() => setOpen(false)}>
           <Logo />
-          <span>Sherwood</span>
+          <span>Larry</span>
         </Link>
         <nav className={open ? 'nav open' : 'nav'}>
           {NAV.map((n) => (

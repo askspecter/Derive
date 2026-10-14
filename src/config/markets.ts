@@ -11,7 +11,7 @@ export interface Asset {
 }
 
 // Logos live in public/tokens. ETH uses the Robinhood Chain feather mark.
-// Robinhood Chain is home to tokenized equities, so Sherwood lists stock
+// Robinhood Chain is home to tokenized equities, so Larry lists stock
 // derivatives next to crypto majors.
 export const ASSETS: Asset[] = [
   { symbol: 'ETH', name: 'Ethereum', kind: 'crypto', spot: 3420, vol: 0.62, color: '#8c9eff', logo: 'tokens/eth.png' },

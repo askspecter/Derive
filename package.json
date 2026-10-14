@@ -1,8 +1,8 @@
 {
-  "name": "sherwood",
+  "name": "larry",
   "private": true,
   "version": "0.1.0",
-  "description": "Sherwood — onchain options, perps and structured yield on Robinhood Chain (Derive-style DEX frontend)",
+  "description": "Larry — onchain options, perps and structured yield on Robinhood Chain (Derive-style DEX frontend)",
   "type": "module",
   "scripts": {
     "dev": "vite",

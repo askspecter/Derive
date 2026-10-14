@@ -9,7 +9,7 @@ export function Footer() {
         <div>
           <div className="brand">
             <Logo size={24} />
-            <span>Sherwood</span>
+            <span>Larry</span>
           </div>
           <p className="muted small">
             Onchain options, perps and structured yield, settled on Robinhood Chain — an Arbitrum Orbit L2 secured by
@@ -38,7 +38,7 @@ export function Footer() {
         </div>
       </div>
       <div className="container footer-note small muted">
-        Sherwood is an independent project and is not affiliated with Robinhood Markets, Inc. Prices shown are a
+        Larry is an independent project and is not affiliated with Robinhood Markets, Inc. Prices shown are a
         simulated oracle and trades are paper positions until contracts are deployed. Derivatives carry significant
         risk.
       </div>

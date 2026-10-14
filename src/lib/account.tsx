@@ -2,7 +2,7 @@ import { createContext, useCallback, useContext, useEffect, useState, type React
 import { useWallet } from './wallet'
 import type { OptionType } from './blackScholes'
 
-// Paper-trading account. Positions live in localStorage until the Sherwood
+// Paper-trading account. Positions live in localStorage until the Larry
 // contracts are deployed on Robinhood Chain; the shape mirrors the onchain
 // subaccount so the UI can be swapped to contract reads later.
 
@@ -81,7 +81,7 @@ const AccountContext = createContext<AccountState | null>(null)
 
 export function AccountProvider({ children }: { children: ReactNode }) {
   const { address } = useWallet()
-  const key = `sherwood:account:${address?.toLowerCase() ?? 'guest'}`
+  const key = `larry:account:${address?.toLowerCase() ?? 'guest'}`
   const [data, setData] = useState<AccountData>(() => load(key))
 
   useEffect(() => setData(load(key)), [key])
