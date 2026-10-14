@@ -20,7 +20,7 @@ export interface Asset {
 export const ASSETS: Asset[] = [
   { id: 0, symbol: 'ETH', name: 'Ethereum', kind: 'crypto', spot: 3420, vol: 0.62, color: '#8c9eff', logo: 'tokens/eth.png' },
   { id: 1, symbol: 'BTC', name: 'Bitcoin', kind: 'crypto', spot: 104250, vol: 0.48, color: '#f7931a', logo: 'tokens/btc.svg' },
-  { id: 2, symbol: 'SOL', name: 'Solana', kind: 'crypto', spot: 182, vol: 0.78, color: '#14f195', logo: 'tokens/sol.svg' },
+  // id 2 (SOL) is reserved until Robinhood Chain has a Chainlink SOL / USD feed. Never reuse it for another asset.
   { id: 3, symbol: 'LINK', name: 'Chainlink', kind: 'crypto', spot: 12.45, vol: 0.75, color: '#2a5ada', logo: 'tokens/link.svg' },
   { id: 4, symbol: 'TSLA', name: 'Tesla', kind: 'stock', spot: 412.3, vol: 0.55, color: '#e82127', logo: 'tokens/tsla.svg' },
   { id: 5, symbol: 'NVDA', name: 'NVIDIA', kind: 'stock', spot: 186.7, vol: 0.46, color: '#76b900', logo: 'tokens/nvda.svg' },

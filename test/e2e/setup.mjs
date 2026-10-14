@@ -18,7 +18,7 @@ async function deploy(art, args) {
 // Robinhood Chain has Multicall3 at its canonical address; the local chain gets a copy there.
 await pub.request({ method: 'hardhat_setCode', params: ['0xcA11bde05977b3631167028862bE2a173976CA11', mocks.Multicall3.deployedBytecode] })
 const usdg = await deploy(mocks.MockERC20, ['Global Dollar', 'USDG', 6])
-const prices = { ETH: 3420, BTC: 104250, SOL: 182, LINK: 12.45, TSLA: 412.3, NVDA: 186.7, AAPL: 247.1 }
+const prices = { ETH: 3420, BTC: 104250, LINK: 12.45, TSLA: 412.3, NVDA: 186.7, AAPL: 247.1 }
 const feeds = {}
 for (const [s, p] of Object.entries(prices)) feeds[s] = await deploy(mocks.MockAggregator, [8, `${s} / USD`, parseUnits(String(p), 8)])
 for (const who of [accts[1], accts[2]]) {

@@ -30,7 +30,7 @@ const PRODUCTS = [
 const PILLARS = [
   { n: '01', title: 'Self custody', body: 'Funds live in smart contracts. No account, no broker, no withdrawal queue.' },
   { n: '02', title: 'Always solvent', body: 'Every position reserves its maximum payout in the vault before it opens.' },
-  { n: '03', title: 'Stocks and crypto', body: 'Trade TSLA, NVDA, META and more next to ETH, BTC, SOL and LINK.' },
+  { n: '03', title: 'Stocks and crypto', body: 'Trade TSLA, NVDA, META and more next to ETH, BTC and LINK.' },
   { n: '04', title: 'Chainlink prices', body: 'Robinhood Chain’s official oracle prices every trade and every settlement.' },
 ]
 
