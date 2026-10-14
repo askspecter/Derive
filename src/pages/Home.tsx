@@ -1,4 +1,4 @@
-import { Link } from 'react-router-dom'
+import { SmartLink as Link } from '../components/SmartLink'
 import { ASSETS } from '../config/markets'
 import { AssetIcon } from '../components/AssetIcon'
 import { Sparkline } from '../components/Sparkline'
@@ -39,7 +39,7 @@ function MarketRow({ idx }: { idx: number }) {
   const a = ASSETS[idx]
   const price = p.prices[a.symbol]
   const listed = !!p.perps.markets[idx]?.enabled || !!p.options.markets[idx]?.enabled
-  const hist = useFeedHistory(price?.feed, price?.roundId, 8, 40)
+  const hist = useFeedHistory(price?.feed, price?.roundId, 8, 24)
   return (
     <Link to={`/perps?asset=${a.symbol}`} className="market-row">
       <div className="asset-cell">
@@ -48,7 +48,7 @@ function MarketRow({ idx }: { idx: number }) {
           <b>{a.symbol}</b>
           <div className="muted small">{a.name}</div>
         </div>
-        {a.kind === 'stock' && <span className="tag">Stock</span>}
+        {a.kind === 'stock' && <span className="tag">{a.tag ?? 'Stock'}</span>}
       </div>
       <Sparkline values={hist.map((x) => x.p)} />
       <div className="r">
@@ -140,9 +140,10 @@ export function Home() {
           </Link>
         </div>
         <div className="market-list">
-          {ASSETS.map((a, i) => (
-            <MarketRow key={a.symbol} idx={i} />
-          ))}
+          {ASSETS.map((a, i) => {
+            const on = !!p.perps.markets[i]?.enabled || !!p.options.markets[i]?.enabled
+            return listed && !on ? null : <MarketRow key={a.symbol} idx={i} />
+          })}
         </div>
       </section>
 

@@ -73,6 +73,10 @@ npm run chain               # local Hardhat chain with chain id 4663 (keep runni
 npm run contracts:test      # contract tests against it
 ```
 
+Production runs on two hosts from one Vercel project: `larry.exchange` (landing, docs) and
+`app.larry.exchange` (trading app, admin). Links and redirects switch hosts at runtime (`src/config/site.ts`);
+localhost and `*.vercel.app` previews keep everything on one host. Add both domains to Reown's allowed domains.
+
 Browser end to end test (local chain running):
 
 ```bash

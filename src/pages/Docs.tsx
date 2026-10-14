@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState, type ReactNode } from 'react'
-import { Link, NavLink, useParams } from 'react-router-dom'
+import { NavLink, useParams } from 'react-router-dom'
+import { SmartLink as Link } from '../components/SmartLink'
 import { ROBINHOOD_CHAIN } from '../config/chains'
 import { ASSETS } from '../config/markets'
 import { ADDRESSES } from '../config/protocol'
@@ -196,7 +197,7 @@ const PAGES: Page[] = [
                     <span className="muted">{a.name}</span>
                   </span>
                 </td>
-                <td>{a.kind === 'stock' ? 'Tokenized stock' : 'Crypto'}</td>
+                <td>{a.kind === 'stock' ? (a.tag === 'ETF' ? 'Tokenized ETF' : 'Tokenized stock') : 'Crypto'}</td>
               </tr>
             ))}
           </tbody>

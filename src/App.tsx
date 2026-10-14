@@ -12,7 +12,17 @@ import { Stats } from './pages/Stats'
 import { Docs } from './pages/Docs'
 import { WalletProvider } from './lib/wallet'
 import { ProtocolProvider } from './lib/protocol'
+import { APP_ORIGIN, IS_APP_HOST, SPLIT_HOSTS, isAppPath } from './config/site'
 import { Admin } from './pages/Admin'
+
+/** Sends app routes opened on larry.exchange over to app.larry.exchange. */
+function HostRouting() {
+  const { pathname, search } = useLocation()
+  useEffect(() => {
+    if (SPLIT_HOSTS && !IS_APP_HOST && isAppPath(pathname)) window.location.replace(`${APP_ORIGIN}/#${pathname}${search}`)
+  }, [pathname, search])
+  return null
+}
 
 function ScrollTop() {
   const { pathname } = useLocation()
@@ -26,11 +36,12 @@ export default function App() {
       <ProtocolProvider>
           <HashRouter>
             <ScrollTop />
+            <HostRouting />
             <Header />
             <WrongNetwork />
             <main>
               <Routes>
-                <Route path="/" element={<Home />} />
+                <Route path="/" element={SPLIT_HOSTS && IS_APP_HOST ? <Navigate to="/perps" replace /> : <Home />} />
                 <Route path="/options" element={<Options />} />
                 <Route path="/perps" element={<Perps />} />
                 <Route path="/vaults" element={<Vaults />} />

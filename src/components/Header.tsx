@@ -1,5 +1,6 @@
 import { useState } from 'react'
-import { Link, NavLink } from 'react-router-dom'
+import { SmartLink, SmartNavLink } from './SmartLink'
+import { APP_ORIGIN, IS_APP_HOST, SPLIT_HOSTS } from '../config/site'
 import { Logo } from './Logo'
 import { WalletButton } from './WalletButton'
 import { useWallet } from '../lib/wallet'
@@ -21,29 +22,34 @@ export function Header() {
   const me = address?.toLowerCase()
   // Admin link only for the admin or current owner, or anyone while the site has no admin configured.
   const showAdmin = !p.configured || (!!me && (me === p.admin?.toLowerCase() || me === p.pool.owner?.toLowerCase()))
-  const nav = showAdmin ? [...NAV, { to: '/admin', label: 'Admin' }] : NAV
+  // On larry.exchange the header links into the app instead of connecting a wallet there.
+  const landing = SPLIT_HOSTS && !IS_APP_HOST
+  const nav = showAdmin && !landing ? [...NAV, { to: '/admin', label: 'Admin' }] : NAV
+  const action = landing ? (
+    <a className="btn btn-accent" href={`${APP_ORIGIN}/#/perps`}>
+      Launch app
+    </a>
+  ) : null
   return (
     <header className="header">
       <div className="header-inner">
-        <Link to="/" className="brand" onClick={() => setOpen(false)}>
+        <SmartLink to="/" className="brand" onClick={() => setOpen(false)}>
           <Logo />
           <span>LARRY</span>
-        </Link>
+        </SmartLink>
         <nav className={open ? 'nav open' : 'nav'}>
           {nav.map((n) => (
-            <NavLink key={n.to} to={n.to} onClick={() => setOpen(false)}>
+            <SmartNavLink key={n.to} to={n.to} onClick={() => setOpen(false)}>
               {n.label}
-            </NavLink>
+            </SmartNavLink>
           ))}
           {/* On phones the wallet button lives inside the menu */}
           <div className="nav-wallet">
-            <WalletButton onAction={() => setOpen(false)} />
+            {action ?? <WalletButton onAction={() => setOpen(false)} />}
           </div>
         </nav>
         <div className="header-actions">
-          <div className="header-wallet">
-            <WalletButton />
-          </div>
+          <div className="header-wallet">{action ?? <WalletButton />}</div>
           <button className="menu-btn" aria-label="Menu" onClick={() => setOpen((o) => !o)}>
             <span />
             <span />

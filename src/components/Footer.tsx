@@ -1,4 +1,4 @@
-import { Link } from 'react-router-dom'
+import { SmartLink as Link } from './SmartLink'
 import { ROBINHOOD_CHAIN } from '../config/chains'
 import { Logo } from './Logo'
 
@@ -26,9 +26,6 @@ export function Footer() {
             <br />
             Derivatives for everyone
           </p>
-          <a href={X_URL} target="_blank" rel="noreferrer" className="btn btn-ghost btn-sm footer-x" aria-label="Larry on X">
-            <XIcon /> Follow on X
-          </a>
         </div>
         <div>
           <h4>Trade</h4>

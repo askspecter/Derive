@@ -1,4 +1,4 @@
-import { Link } from 'react-router-dom'
+import { SmartLink as Link } from './SmartLink'
 import type { TxStatus } from '../lib/tx'
 import { useProtocol } from '../lib/protocol'
 import { useWallet } from '../lib/wallet'

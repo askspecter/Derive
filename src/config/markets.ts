@@ -10,6 +10,8 @@ export interface Asset {
   vol: number // annualised implied vol used as ATM baseline
   color: string
   logo: string
+  /** Label shown instead of the kind, e.g. ETF. */
+  tag?: string
 }
 
 // Logos live in public/tokens. ETH uses the Robinhood Chain feather mark.
@@ -23,6 +25,25 @@ export const ASSETS: Asset[] = [
   { id: 4, symbol: 'TSLA', name: 'Tesla', kind: 'stock', spot: 412.3, vol: 0.55, color: '#e82127', logo: 'tokens/tsla.svg' },
   { id: 5, symbol: 'NVDA', name: 'NVIDIA', kind: 'stock', spot: 186.7, vol: 0.46, color: '#76b900', logo: 'tokens/nvda.svg' },
   { id: 6, symbol: 'AAPL', name: 'Apple', kind: 'stock', spot: 247.1, vol: 0.27, color: '#a2aaad', logo: 'tokens/aapl.svg' },
+  { id: 7, symbol: 'META', name: 'Meta', kind: 'stock', spot: 720, vol: 0.4, color: '#0866FF', logo: 'tokens/meta.svg' },
+  { id: 8, symbol: 'MSFT', name: 'Microsoft', kind: 'stock', spot: 510, vol: 0.28, color: '#00A4EF', logo: 'tokens/msft.svg' },
+  { id: 9, symbol: 'AMZN', name: 'Amazon', kind: 'stock', spot: 225, vol: 0.35, color: '#FF9900', logo: 'tokens/amzn.svg' },
+  { id: 10, symbol: 'GOOGL', name: 'Alphabet', kind: 'stock', spot: 245, vol: 0.32, color: '#FFFFFF', logo: 'tokens/googl.svg' },
+  { id: 11, symbol: 'COIN', name: 'Coinbase', kind: 'stock', spot: 340, vol: 0.7, color: '#0052FF', logo: 'tokens/coin.svg' },
+  { id: 12, symbol: 'PLTR', name: 'Palantir', kind: 'stock', spot: 175, vol: 0.65, color: '#101113', logo: 'tokens/pltr.svg' },
+  { id: 13, symbol: 'MSTR', name: 'Strategy', kind: 'stock', spot: 390, vol: 0.85, color: '#D9232E', logo: 'tokens/mstr.svg' },
+  { id: 14, symbol: 'SPY', name: 'SPDR S&P 500 ETF', kind: 'stock', spot: 665, vol: 0.16, color: '#1B3D6D', logo: 'tokens/spy.svg', tag: 'ETF' },
+  { id: 15, symbol: 'QQQ', name: 'Invesco QQQ ETF', kind: 'stock', spot: 600, vol: 0.2, color: '#2E2A80', logo: 'tokens/qqq.svg', tag: 'ETF' },
+  { id: 16, symbol: 'TSM', name: 'TSMC', kind: 'stock', spot: 290, vol: 0.38, color: '#C8102E', logo: 'tokens/tsm.svg' },
+  { id: 17, symbol: 'INTC', name: 'Intel', kind: 'stock', spot: 24, vol: 0.45, color: '#0071C5', logo: 'tokens/intc.svg' },
+  { id: 18, symbol: 'MU', name: 'Micron', kind: 'stock', spot: 160, vol: 0.5, color: '#0069B4', logo: 'tokens/mu.svg' },
+  { id: 19, symbol: 'ORCL', name: 'Oracle', kind: 'stock', spot: 290, vol: 0.4, color: '#F80000', logo: 'tokens/orcl.svg' },
+  { id: 20, symbol: 'ASML', name: 'ASML', kind: 'stock', spot: 980, vol: 0.38, color: '#10069F', logo: 'tokens/asml.svg' },
+  { id: 21, symbol: 'BABA', name: 'Alibaba', kind: 'stock', spot: 170, vol: 0.45, color: '#FF6A00', logo: 'tokens/baba.svg' },
+  { id: 22, symbol: 'CRCL', name: 'Circle', kind: 'stock', spot: 140, vol: 0.9, color: '#1A1F36', logo: 'tokens/crcl.svg' },
+  { id: 23, symbol: 'IONQ', name: 'IonQ', kind: 'stock', spot: 60, vol: 0.9, color: '#4B2E83', logo: 'tokens/ionq.svg' },
+  { id: 24, symbol: 'RKLB', name: 'Rocket Lab', kind: 'stock', spot: 55, vol: 0.85, color: '#111111', logo: 'tokens/rklb.svg' },
+  { id: 25, symbol: 'DELL', name: 'Dell', kind: 'stock', spot: 135, vol: 0.45, color: '#007DB8', logo: 'tokens/dell.svg' },
 ]
 
 export const assetBySymbol = (s: string) => ASSETS.find((a) => a.symbol === s) ?? ASSETS[0]
