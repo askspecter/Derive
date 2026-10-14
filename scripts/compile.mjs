@@ -1,0 +1,67 @@
+// Compiles contracts/ with solc-js and writes ABIs and bytecode for the app and tests.
+// Usage: node scripts/compile.mjs
+import fs from 'node:fs'
+import path from 'node:path'
+import { createRequire } from 'node:module'
+
+const require = createRequire(import.meta.url)
+const solc = require('solc')
+const root = path.resolve(path.dirname(new URL(import.meta.url).pathname), '..')
+
+function collect(dir) {
+  return fs.readdirSync(dir, { withFileTypes: true }).flatMap((e) => {
+    const p = path.join(dir, e.name)
+    return e.isDirectory() ? collect(p) : p.endsWith('.sol') ? [p] : []
+  })
+}
+
+const sources = Object.fromEntries(
+  collect(path.join(root, 'contracts')).map((f) => [path.relative(root, f), { content: fs.readFileSync(f, 'utf8') }]),
+)
+
+function findImports(p) {
+  for (const base of [path.join(root, 'node_modules'), root]) {
+    const f = path.join(base, p)
+    if (fs.existsSync(f)) return { contents: fs.readFileSync(f, 'utf8') }
+  }
+  return { error: `not found: ${p}` }
+}
+
+const input = {
+  language: 'Solidity',
+  sources,
+  settings: {
+    optimizer: { enabled: true, runs: 200 },
+    evmVersion: 'cancun',
+    outputSelection: { '*': { '*': ['abi', 'evm.bytecode.object', 'evm.deployedBytecode.object'] } },
+  },
+}
+
+console.log(`solc ${solc.version()}`)
+const out = JSON.parse(solc.compile(JSON.stringify(input), { import: findImports }))
+const errors = (out.errors ?? []).filter((e) => e.severity === 'error')
+for (const e of out.errors ?? []) console[e.severity === 'error' ? 'error' : 'warn'](e.formattedMessage)
+if (errors.length) process.exit(1)
+
+const pick = (file, name) => {
+  const c = out.contracts[file][name]
+  const size = c.evm.deployedBytecode.object.length / 2
+  console.log(`${name.padEnd(16)} ${size} bytes${size > 24576 ? '  (over the 24 KB limit!)' : ''}`)
+  return { abi: c.abi, bytecode: '0x' + c.evm.bytecode.object }
+}
+
+const app = {
+  LarryPool: pick('contracts/LarryPool.sol', 'LarryPool'),
+  LarryPerps: pick('contracts/LarryPerps.sol', 'LarryPerps'),
+  LarryOptions: pick('contracts/LarryOptions.sol', 'LarryOptions'),
+}
+const mocks = {
+  MockERC20: pick('contracts/mocks/MockERC20.sol', 'MockERC20'),
+  MockAggregator: pick('contracts/mocks/MockAggregator.sol', 'MockAggregator'),
+}
+
+fs.mkdirSync(path.join(root, 'src/contracts'), { recursive: true })
+fs.writeFileSync(path.join(root, 'src/contracts/artifacts.json'), JSON.stringify(app))
+fs.mkdirSync(path.join(root, 'test/artifacts'), { recursive: true })
+fs.writeFileSync(path.join(root, 'test/artifacts/mocks.json'), JSON.stringify(mocks))
+console.log('wrote src/contracts/artifacts.json and test/artifacts/mocks.json')

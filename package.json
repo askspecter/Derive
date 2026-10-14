@@ -2,13 +2,16 @@
   "name": "larry",
   "private": true,
   "version": "0.1.0",
-  "description": "Larry — onchain options, perps and structured yield on Robinhood Chain (Derive-style DEX frontend)",
+  "description": "Larry \u2014 onchain options, perps and structured yield on Robinhood Chain (Derive-style DEX frontend)",
   "type": "module",
   "scripts": {
     "dev": "vite",
     "build": "tsc -b && vite build",
     "preview": "vite preview",
-    "typecheck": "tsc -b"
+    "typecheck": "tsc -b",
+    "contracts:compile": "node scripts/compile.mjs",
+    "chain": "hardhat node --port 8545",
+    "contracts:test": "node --test --test-concurrency=1 test/protocol.test.mjs"
   },
   "dependencies": {
     "@reown/appkit": "1.8.24",
@@ -21,9 +24,13 @@
     "wagmi": "3.7.7"
   },
   "devDependencies": {
+    "@openzeppelin/contracts": "5.6.1",
     "@types/react": "18.3.12",
     "@types/react-dom": "18.3.1",
     "@vitejs/plugin-react": "4.3.4",
+    "hardhat": "2.29.1",
+    "solady": "0.1.26",
+    "solc": "0.8.28",
     "typescript": "5.9.3",
     "vite": "5.4.11"
   }
