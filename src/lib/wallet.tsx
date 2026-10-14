@@ -1,147 +1,62 @@
-import { createContext, useCallback, useContext, useEffect, useState, type ReactNode } from 'react'
-import { ROBINHOOD_CHAIN, isRobinhoodChain } from '../config/chains'
+import { createContext, useContext, type ReactNode } from 'react'
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
+import { WagmiProvider, useBalance } from 'wagmi'
+import { useAppKit, useAppKitAccount, useAppKitNetwork, useDisconnect } from '@reown/appkit/react'
+import { robinhood } from '@reown/appkit/networks'
+import { appKit, wagmiAdapter } from './reown'
 
-interface Eip1193Provider {
-  request(args: { method: string; params?: unknown[] }): Promise<unknown>
-  on?(event: string, cb: (...args: any[]) => void): void
-  removeListener?(event: string, cb: (...args: any[]) => void): void
-}
-
-declare global {
-  interface Window {
-    ethereum?: Eip1193Provider
-  }
-}
+// Wallet connection runs through Reown AppKit. This context keeps the small
+// interface the rest of the app uses, so pages never touch AppKit directly.
 
 interface WalletState {
   address: string | null
   chainId: number | null
   balance: number | null
   connecting: boolean
-  error: string | null
-  hasProvider: boolean
   onRobinhood: boolean
-  connect(): Promise<void>
+  connect(): void
+  openAccount(): void
   disconnect(): void
-  switchChain(): Promise<void>
+  switchChain(): void
 }
 
 const WalletContext = createContext<WalletState | null>(null)
+const queryClient = new QueryClient()
 
-const ADD_PARAMS = {
-  chainId: ROBINHOOD_CHAIN.hexId,
-  chainName: ROBINHOOD_CHAIN.name,
-  nativeCurrency: ROBINHOOD_CHAIN.nativeCurrency,
-  rpcUrls: [ROBINHOOD_CHAIN.rpcUrl],
-  blockExplorerUrls: [ROBINHOOD_CHAIN.explorerUrl],
+function WalletBridge({ children }: { children: ReactNode }) {
+  const { open } = useAppKit()
+  const { address, isConnected, status } = useAppKitAccount()
+  const { chainId, switchNetwork } = useAppKitNetwork()
+  const { disconnect } = useDisconnect()
+  const id = chainId == null ? null : Number(chainId)
+  const { data: bal } = useBalance({
+    address: address as `0x${string}` | undefined,
+    chainId: robinhood.id,
+    query: { enabled: !!address },
+  })
+
+  const value: WalletState = {
+    address: isConnected && address ? address : null,
+    chainId: id,
+    balance: bal ? Number(bal.value) / 10 ** bal.decimals : null,
+    connecting: status === 'connecting' || status === 'reconnecting',
+    onRobinhood: id === robinhood.id,
+    connect: () => open({ view: 'Connect' }),
+    openAccount: () => open({ view: 'Account' }),
+    disconnect: () => disconnect(),
+    switchChain: () => switchNetwork(robinhood),
+  }
+
+  return <WalletContext.Provider value={value}>{children}</WalletContext.Provider>
 }
 
 export function WalletProvider({ children }: { children: ReactNode }) {
-  const [address, setAddress] = useState<string | null>(null)
-  const [chainId, setChainId] = useState<number | null>(null)
-  const [balance, setBalance] = useState<number | null>(null)
-  const [connecting, setConnecting] = useState(false)
-  const [error, setError] = useState<string | null>(null)
-  const provider = typeof window !== 'undefined' ? window.ethereum : undefined
-
-  const refreshBalance = useCallback(
-    async (addr: string) => {
-      if (!provider) return
-      try {
-        const hex = (await provider.request({ method: 'eth_getBalance', params: [addr, 'latest'] })) as string
-        setBalance(Number(BigInt(hex)) / 1e18)
-      } catch {
-        setBalance(null)
-      }
-    },
-    [provider],
-  )
-
-  const switchChain = useCallback(
-    async () => {
-      if (!provider) return
-      try {
-        await provider.request({ method: 'wallet_switchEthereumChain', params: [{ chainId: ROBINHOOD_CHAIN.hexId }] })
-      } catch (e: any) {
-        // 4902: chain not yet added to the wallet.
-        if (e?.code === 4902 || e?.data?.originalError?.code === 4902) {
-          await provider.request({ method: 'wallet_addEthereumChain', params: [ADD_PARAMS] })
-        } else {
-          setError(e?.message ?? 'Failed to switch network')
-        }
-      }
-    },
-    [provider],
-  )
-
-  const connect = useCallback(async () => {
-    if (!provider) {
-      setError('No wallet found. Install Robinhood Wallet, MetaMask or another EVM wallet.')
-      return
-    }
-    setConnecting(true)
-    setError(null)
-    try {
-      const accounts = (await provider.request({ method: 'eth_requestAccounts' })) as string[]
-      setAddress(accounts[0] ?? null)
-      const id = parseInt((await provider.request({ method: 'eth_chainId' })) as string, 16)
-      setChainId(id)
-      if (!isRobinhoodChain(id)) await switchChain()
-    } catch (e: any) {
-      setError(e?.message ?? 'Connection rejected')
-    } finally {
-      setConnecting(false)
-    }
-  }, [provider, switchChain])
-
-  const disconnect = useCallback(() => {
-    setAddress(null)
-    setBalance(null)
-  }, [])
-
-  useEffect(() => {
-    if (!provider?.on) return
-    const onAccounts = (accs: string[]) => setAddress(accs[0] ?? null)
-    const onChain = (hex: string) => setChainId(parseInt(hex, 16))
-    provider.on('accountsChanged', onAccounts)
-    provider.on('chainChanged', onChain)
-    provider
-      .request({ method: 'eth_accounts' })
-      .then((accs) => {
-        const list = accs as string[]
-        if (list[0]) {
-          setAddress(list[0])
-          return provider.request({ method: 'eth_chainId' }).then((h) => setChainId(parseInt(h as string, 16)))
-        }
-      })
-      .catch(() => {})
-    return () => {
-      provider.removeListener?.('accountsChanged', onAccounts)
-      provider.removeListener?.('chainChanged', onChain)
-    }
-  }, [provider])
-
-  useEffect(() => {
-    if (address) refreshBalance(address)
-  }, [address, chainId, refreshBalance])
-
   return (
-    <WalletContext.Provider
-      value={{
-        address,
-        chainId,
-        balance,
-        connecting,
-        error,
-        hasProvider: !!provider,
-        onRobinhood: isRobinhoodChain(chainId),
-        connect,
-        disconnect,
-        switchChain,
-      }}
-    >
-      {children}
-    </WalletContext.Provider>
+    <WagmiProvider config={wagmiAdapter.wagmiConfig}>
+      <QueryClientProvider client={queryClient}>
+        <WalletBridge>{children}</WalletBridge>
+      </QueryClientProvider>
+    </WagmiProvider>
   )
 }
 
@@ -150,3 +65,5 @@ export function useWallet() {
   if (!ctx) throw new Error('useWallet must be used inside WalletProvider')
   return ctx
 }
+
+export { appKit }

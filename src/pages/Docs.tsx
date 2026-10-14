@@ -103,11 +103,13 @@ const PAGES: Page[] = [
         <Steps
           items={[
             <>
-              <b>Install a wallet.</b> Robinhood Wallet, MetaMask, Rabby or any EVM wallet works.
+              <b>Install a wallet.</b> Robinhood Wallet, MetaMask, Rabby, Coinbase Wallet or any of the 500+
+              wallets supported through Reown and WalletConnect.
             </>,
             <>
-              <b>Connect.</b> Press <span className="kbd">Connect wallet</span> in the top right. Larry asks your
-              wallet to switch to Robinhood Chain and adds the network if it is missing.
+              <b>Connect.</b> Press <span className="kbd">Connect wallet</span> in the top right and pick your
+              wallet from the list, or scan the QR code with a mobile wallet. Larry asks your wallet to switch to
+              Robinhood Chain and adds the network if it is missing.
             </>,
             <>
               <b>Fund your account.</b> Bridge ETH or USDC to Robinhood Chain. In preview every account starts with
@@ -455,7 +457,7 @@ const PAGES: Page[] = [
         {[
           ['Is Larry part of Robinhood?', 'No. Larry is an independent project built on Robinhood Chain.'],
           ['Do I need to verify my identity?', 'No. You trade straight from your own wallet.'],
-          ['Which wallets work?', 'Any EVM wallet, including Robinhood Wallet, MetaMask and Rabby.'],
+          ['Which wallets work?', 'Any EVM wallet. Larry connects through Reown, so browser extensions and mobile wallets over WalletConnect both work.'],
           ['Can I trade stocks outside market hours?', 'Yes. Tokenized stock markets on Larry are open 24/7.'],
           ['Is my money at risk in the preview?', 'No. The preview uses paper balances only.'],
         ].map(([q, a]) => (

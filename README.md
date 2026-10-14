@@ -18,7 +18,7 @@ untuk kripto dan saham tertokenisasi.*
 - **Vaults**: covered call, cash-secured put, principal protected, basis and iron condor strategies
 - **Portfolio**: equity, free margin, unrealized PnL, open positions, vault positions, trade history
 - **Stats**: protocol metrics and Robinhood Chain network details
-- **Wallet**: EIP-1193 connect (Robinhood Wallet, MetaMask, …) with automatic switch/add of Robinhood Chain
+- **Wallet**: Reown AppKit modal (browser wallets and WalletConnect QR) locked to Robinhood Chain
 - Markets for crypto (ETH, BTC, SOL) and tokenized stocks (HOOD, TSLA, NVDA, AAPL)
 
 ## Network
@@ -43,6 +43,17 @@ This is a frontend. Prices come from a simulated oracle (`src/lib/market.tsx`) a
 positions** stored in `localStorage` per wallet address (`src/lib/account.tsx`). To go live, deploy the
 matching contracts (margin accounts, option/perp settlement, vaults) on Robinhood Chain and an oracle
 feed, then replace those two modules with contract reads/writes.
+
+## Wallet connection (Reown)
+
+Wallets connect through [Reown AppKit](https://docs.reown.com/appkit/react/core/installation) with the wagmi
+adapter, locked to Robinhood Chain mainnet. Config lives in `src/lib/reown.ts`.
+
+1. Create a project at https://dashboard.reown.com and copy its Project ID.
+2. Copy `.env.example` to `.env` and set `VITE_REOWN_PROJECT_ID`.
+3. In the Reown dashboard, add your site domain (and `localhost` for development) to the allowed domains.
+
+On Vercel or Netlify, add `VITE_REOWN_PROJECT_ID` as an environment variable instead of a `.env` file.
 
 ## Development
 
