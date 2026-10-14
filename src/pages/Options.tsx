@@ -5,7 +5,7 @@ import { AssetTabs } from '../components/AssetTabs'
 import { PriceChart } from '../components/PriceChart'
 import { blackScholes, smileVol, type OptionType } from '../lib/blackScholes'
 import { strikesAround, upcomingExpiries } from '../lib/expiries'
-import { cls, num, pct, usd } from '../lib/format'
+import { changeNum, cls, dateLabel, num, optionName, pct, usd } from '../lib/format'
 import { useMarket } from '../lib/market'
 import { useAccount, type Side } from '../lib/account'
 import { PositionsPanel } from '../components/PositionsPanel'
@@ -86,7 +86,7 @@ export function Options() {
                 </div>
                 <div>
                   <div className="muted small">Expiry</div>
-                  <div className="mono">{expiry.date.toISOString().slice(0, 10)}</div>
+                  <div className="mono">{dateLabel(expiry.date.getTime())}</div>
                 </div>
                 <div>
                   <div className="muted small">Time left</div>
@@ -151,7 +151,7 @@ export function Options() {
                           {num(p.ask)}
                         </td>
                         <td className={cls('r mono hide-sm', k > spot && 'itm')}>{pct(p.iv, 1)}</td>
-                        <td className={cls('r mono hide-sm', k > spot && 'itm')}>{p.delta.toFixed(2)}</td>
+                        <td className={cls('r mono hide-sm', k > spot && 'itm')}>{Math.abs(p.delta).toFixed(2)}</td>
                       </tr>
                     )
                   })}
@@ -176,7 +176,7 @@ export function Options() {
                 </button>
               </div>
               <div className="ticket-instrument">
-                {symbol}-{expiry.label}-{sel.strike}-{sel.type === 'call' ? 'C' : 'P'}
+                {optionName(symbol, expiry.date.getTime(), sel.strike, sel.type)}
               </div>
               <label className="field">
                 <span>Contracts</span>
@@ -201,7 +201,7 @@ export function Options() {
               <div className="greeks">
                 <div>
                   <span>Δ</span>
-                  <b className="mono">{(selQuote.delta * qty * (sel.side === 'buy' ? 1 : -1)).toFixed(3)}</b>
+                  <b className="mono">{changeNum(selQuote.delta * qty * (sel.side === 'buy' ? 1 : -1), 3)}</b>
                 </div>
                 <div>
                   <span>Γ</span>
@@ -209,7 +209,7 @@ export function Options() {
                 </div>
                 <div>
                   <span>Θ/day</span>
-                  <b className="mono">{(selQuote.theta * qty * (sel.side === 'buy' ? 1 : -1)).toFixed(2)}</b>
+                  <b className="mono">{changeNum(selQuote.theta * qty * (sel.side === 'buy' ? 1 : -1))}</b>
                 </div>
                 <div>
                   <span>Vega</span>

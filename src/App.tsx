@@ -8,6 +8,7 @@ import { Perps } from './pages/Perps'
 import { Vaults } from './pages/Vaults'
 import { Portfolio } from './pages/Portfolio'
 import { Stats } from './pages/Stats'
+import { Docs } from './pages/Docs'
 import { WalletProvider } from './lib/wallet'
 import { MarketProvider } from './lib/market'
 import { AccountProvider } from './lib/account'
@@ -34,6 +35,8 @@ export default function App() {
                 <Route path="/vaults" element={<Vaults />} />
                 <Route path="/portfolio" element={<Portfolio />} />
                 <Route path="/stats" element={<Stats />} />
+                <Route path="/docs" element={<Docs />} />
+                <Route path="/docs/:slug" element={<Docs />} />
                 <Route path="*" element={<Navigate to="/" replace />} />
               </Routes>
             </main>

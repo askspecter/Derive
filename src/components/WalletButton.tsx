@@ -43,7 +43,7 @@ export function WalletButton() {
       {menu && (
         <div className="dropdown">
           <div className="dropdown-row muted">Balance</div>
-          <div className="dropdown-row mono">{w.balance != null ? `${w.balance.toFixed(4)} ETH` : '—'}</div>
+          <div className="dropdown-row mono">{w.balance != null ? `${w.balance.toFixed(4)} ETH` : 'Unavailable'}</div>
           <hr />
           <a href={`${ROBINHOOD_CHAIN.explorerUrl}/address/${w.address}`} target="_blank" rel="noreferrer">
             View on explorer ↗

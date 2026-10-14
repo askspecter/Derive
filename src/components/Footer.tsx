@@ -6,14 +6,15 @@ export function Footer() {
   return (
     <footer className="footer">
       <div className="container footer-grid">
-        <div>
+        <div className="footer-brand">
           <div className="brand">
-            <Logo size={24} />
-            <span>Larry</span>
+            <Logo />
+            <span>LARRY</span>
           </div>
-          <p className="muted small">
-            Onchain options, perps and structured yield, settled on Robinhood Chain — an Arbitrum Orbit L2 secured by
-            Ethereum.
+          <p className="eyebrow">
+            Take the edge back
+            <br />
+            Derivatives for everyone
           </p>
         </div>
         <div>
@@ -21,6 +22,14 @@ export function Footer() {
           <Link to="/options">Options</Link>
           <Link to="/perps">Perpetuals</Link>
           <Link to="/vaults">Vaults</Link>
+          <Link to="/portfolio">Portfolio</Link>
+        </div>
+        <div>
+          <h4>Learn</h4>
+          <Link to="/docs">Docs</Link>
+          <Link to="/docs/fees">Fees</Link>
+          <Link to="/docs/risks">Risks</Link>
+          <Link to="/stats">Stats</Link>
         </div>
         <div>
           <h4>Network</h4>
@@ -28,19 +37,16 @@ export function Footer() {
             Block explorer
           </a>
           <a href="https://docs.robinhood.com/chain/connecting" target="_blank" rel="noreferrer">
-            Robinhood Chain docs
+            Robinhood Chain
           </a>
         </div>
-        <div>
-          <h4>Protocol</h4>
-          <Link to="/stats">Stats</Link>
-          <Link to="/portfolio">Portfolio</Link>
-        </div>
       </div>
-      <div className="container footer-note small muted">
-        Larry is an independent project and is not affiliated with Robinhood Markets, Inc. Prices shown are a
-        simulated oracle and trades are paper positions until contracts are deployed. Derivatives carry significant
-        risk.
+      <div className="container footer-note">
+        <span>© {new Date().getFullYear()} Larry</span>
+        <span>
+          Independent project, not affiliated with Robinhood Markets, Inc. Preview release: prices are simulated and
+          trades are paper positions.
+        </span>
       </div>
     </footer>
   )

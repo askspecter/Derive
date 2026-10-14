@@ -1,6 +1,8 @@
 import { createContext, useCallback, useContext, useEffect, useState, type ReactNode } from 'react'
 import { useWallet } from './wallet'
 import type { OptionType } from './blackScholes'
+import { VAULTS } from '../config/markets'
+import { optionName } from './format'
 
 // Paper-trading account. Positions live in localStorage until the Larry
 // contracts are deployed on Robinhood Chain; the shape mirrors the onchain
@@ -67,6 +69,7 @@ interface AccountState extends AccountData {
 
 const STARTING_CASH = 25_000
 const empty = (): AccountData => ({ cash: STARTING_CASH, options: [], perps: [], vaults: [], history: [] })
+const vaultName = (id: string) => VAULTS.find((v) => v.id === id)?.name ?? id
 const uid = () => Math.random().toString(36).slice(2, 10)
 
 function load(key: string): AccountData {
@@ -105,7 +108,7 @@ export function AccountProvider({ children }: { children: ReactNode }) {
         cash: d.cash - cost,
         options: [...d.options, { ...p, id: uid(), kind: 'option', openedAt: Date.now() }],
         history: log(d, {
-          label: `${p.asset} ${new Date(p.expiry).toISOString().slice(0, 10)} ${p.strike} ${p.type.toUpperCase()}`,
+          label: optionName(p.asset, p.expiry, p.strike, p.type),
           side: p.side,
           size: p.size,
           price: p.entry,
@@ -127,7 +130,7 @@ export function AccountProvider({ children }: { children: ReactNode }) {
         cash: d.cash + back,
         options: d.options.filter((o) => o.id !== id),
         history: log(d, {
-          label: `${p.asset} ${p.strike} ${p.type.toUpperCase()} close`,
+          label: `${optionName(p.asset, p.expiry, p.strike, p.type)} close`,
           side: p.side === 'buy' ? 'sell' : 'buy',
           size: p.size,
           price: mark,
@@ -145,7 +148,7 @@ export function AccountProvider({ children }: { children: ReactNode }) {
         ...d,
         cash: d.cash - margin - fee,
         perps: [...d.perps, { ...p, id: uid(), kind: 'perp', openedAt: Date.now() }],
-        history: log(d, { label: `${p.asset}-PERP ${p.leverage}x`, side: p.side, size: p.size, price: p.entry }),
+        history: log(d, { label: `${p.asset} PERP ${p.leverage}x`, side: p.side, size: p.size, price: p.entry }),
       }))
       return null
     },
@@ -164,7 +167,7 @@ export function AccountProvider({ children }: { children: ReactNode }) {
         cash: d.cash + Math.max(margin + pnl, 0),
         perps: d.perps.filter((o) => o.id !== id),
         history: log(d, {
-          label: `${p.asset}-PERP close`,
+          label: `${p.asset} PERP close`,
           side: p.side === 'long' ? 'short' : 'long',
           size: p.size,
           price: mark,
@@ -182,7 +185,7 @@ export function AccountProvider({ children }: { children: ReactNode }) {
         const vaults = existing
           ? d.vaults.map((v) => (v.vaultId === vaultId ? { ...v, amount: v.amount + amount } : v))
           : [...d.vaults, { vaultId, amount, depositedAt: Date.now() }]
-        return { ...d, cash: d.cash - amount, vaults, history: log(d, { label: `Vault ${vaultId}`, side: 'deposit', size: amount, price: 1 }) }
+        return { ...d, cash: d.cash - amount, vaults, history: log(d, { label: vaultName(vaultId), side: 'deposit', size: amount, price: 1 }) }
       })
       return null
     },
@@ -197,7 +200,7 @@ export function AccountProvider({ children }: { children: ReactNode }) {
         ...d,
         cash: d.cash + value,
         vaults: d.vaults.filter((x) => x.vaultId !== vaultId),
-        history: log(d, { label: `Vault ${vaultId}`, side: 'withdraw', size: value, price: 1 }),
+        history: log(d, { label: vaultName(vaultId), side: 'withdraw', size: value, price: 1 }),
       }
     })
   }, [])

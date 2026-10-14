@@ -1,3 +1,3 @@
-export function Logo({ size = 28 }: { size?: number }) {
-  return <img className="logo" src="logo.png" alt="" width={size} height={size} />
+export function Logo({ height = 18 }: { height?: number }) {
+  return <img className="logo" src="mark.png" alt="" height={height} style={{ width: 'auto' }} />
 }

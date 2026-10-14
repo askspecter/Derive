@@ -5,7 +5,7 @@ import { useAccount } from '../lib/account'
 import { useMarket } from '../lib/market'
 import { useWallet } from '../lib/wallet'
 import { optionMark, optionPnl, perpPnl, vaultValue } from '../lib/valuation'
-import { cls, shortAddr, usd } from '../lib/format'
+import { changeNum, changeUsd, cls, shortAddr, usd } from '../lib/format'
 
 export function Portfolio() {
   const account = useAccount()
@@ -36,7 +36,7 @@ export function Portfolio() {
                 Subaccount for <span className="mono">{shortAddr(wallet.address)}</span>
               </>
             ) : (
-              'Guest paper account — connect a wallet to keep a subaccount per address.'
+              'Guest paper account. Connect a wallet to keep a subaccount per address.'
             )}
           </p>
         </div>
@@ -61,7 +61,7 @@ export function Portfolio() {
         </div>
         <div className="card stat">
           <div className="muted small">Unrealized PnL</div>
-          <div className={cls('stat-value', optPnl + prpPnl >= 0 ? 'up' : 'down')}>{usd(optPnl + prpPnl)}</div>
+          <div className={cls('stat-value', optPnl + prpPnl >= 0 ? 'up' : 'down')}>{changeUsd(optPnl + prpPnl)}</div>
         </div>
         <div className="card stat">
           <div className="muted small">Vaults</div>
@@ -111,7 +111,7 @@ export function Portfolio() {
           </div>
         )}
       </div>
-      <p className="muted small">Approximate net delta (contracts / units): {netDelta.toFixed(2)}</p>
+      <p className="muted small">Approximate net delta in contracts and units: {changeNum(netDelta)}</p>
     </div>
   )
 }

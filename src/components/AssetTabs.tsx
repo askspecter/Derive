@@ -1,7 +1,7 @@
 import { ASSETS } from '../config/markets'
 import { useMarket } from '../lib/market'
 import { AssetIcon } from './AssetIcon'
-import { cls, num, signedPct } from '../lib/format'
+import { changePct, cls, num } from '../lib/format'
 
 export function AssetTabs({ value, onChange }: { value: string; onChange(s: string): void }) {
   const { prices, open24h } = useMarket()
@@ -15,7 +15,7 @@ export function AssetTabs({ value, onChange }: { value: string; onChange(s: stri
             <span className="asset-sym">{a.symbol}</span>
             {a.kind === 'stock' && <span className="tag">Stock</span>}
             <span className="mono small">{num(prices[a.symbol], prices[a.symbol] < 10 ? 4 : 2)}</span>
-            <span className={cls('mono small', ch >= 0 ? 'up' : 'down')}>{signedPct(ch)}</span>
+            <span className={cls('mono small', ch >= 0 ? 'up' : 'down')}>{changePct(ch)}</span>
           </button>
         )
       })}

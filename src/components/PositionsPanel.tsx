@@ -2,7 +2,7 @@ import { useState } from 'react'
 import { useAccount } from '../lib/account'
 import { useMarket } from '../lib/market'
 import { optionMark, optionPnl, perpLiquidation, perpPnl } from '../lib/valuation'
-import { cls, num, usd } from '../lib/format'
+import { changeUsd, cls, num, optionName, usd } from '../lib/format'
 
 export function PositionsPanel({ initialTab = 'options' }: { initialTab?: 'options' | 'perps' | 'history' }) {
   const account = useAccount()
@@ -46,13 +46,13 @@ export function PositionsPanel({ initialTab = 'options' }: { initialTab?: 'optio
                   return (
                     <tr key={p.id}>
                       <td className="mono">
-                        {p.asset}-{new Date(p.expiry).toISOString().slice(5, 10)}-{p.strike}-{p.type === 'call' ? 'C' : 'P'}
+                        {optionName(p.asset, p.expiry, p.strike, p.type)}
                       </td>
                       <td className={p.side === 'buy' ? 'up' : 'down'}>{p.side === 'buy' ? 'Long' : 'Short'}</td>
                       <td className="r mono">{num(p.size)}</td>
                       <td className="r mono">{usd(p.entry)}</td>
                       <td className="r mono">{usd(mark)}</td>
-                      <td className={cls('r mono', pnl >= 0 ? 'up' : 'down')}>{usd(pnl)}</td>
+                      <td className={cls('r mono', pnl >= 0 ? 'up' : 'down')}>{changeUsd(pnl)}</td>
                       <td className="r">
                         <button className="btn btn-sm btn-ghost" onClick={() => account.closeOption(p.id, mark)}>
                           Close
@@ -88,14 +88,14 @@ export function PositionsPanel({ initialTab = 'options' }: { initialTab?: 'optio
                   return (
                     <tr key={p.id}>
                       <td className="mono">
-                        {p.asset}-PERP <span className="tag">{p.leverage}x</span>
+                        {p.asset} PERP <span className="tag">{p.leverage}x</span>
                       </td>
                       <td className={p.side === 'long' ? 'up' : 'down'}>{p.side === 'long' ? 'Long' : 'Short'}</td>
                       <td className="r mono">{num(p.size, 4)}</td>
                       <td className="r mono">{usd(p.entry)}</td>
                       <td className="r mono">{usd(mark)}</td>
                       <td className="r mono hide-sm">{usd(perpLiquidation(p))}</td>
-                      <td className={cls('r mono', pnl >= 0 ? 'up' : 'down')}>{usd(pnl)}</td>
+                      <td className={cls('r mono', pnl >= 0 ? 'up' : 'down')}>{changeUsd(pnl)}</td>
                       <td className="r">
                         <button className="btn btn-sm btn-ghost" onClick={() => account.closePerp(p.id, mark)}>
                           Close

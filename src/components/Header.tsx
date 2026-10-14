@@ -9,6 +9,7 @@ const NAV = [
   { to: '/vaults', label: 'Vaults' },
   { to: '/portfolio', label: 'Portfolio' },
   { to: '/stats', label: 'Stats' },
+  { to: '/docs', label: 'Docs' },
 ]
 
 export function Header() {
@@ -18,7 +19,7 @@ export function Header() {
       <div className="header-inner">
         <Link to="/" className="brand" onClick={() => setOpen(false)}>
           <Logo />
-          <span>Larry</span>
+          <span>LARRY</span>
         </Link>
         <nav className={open ? 'nav open' : 'nav'}>
           {NAV.map((n) => (

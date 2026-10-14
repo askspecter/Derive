@@ -7,7 +7,7 @@ import { PositionsPanel } from '../components/PositionsPanel'
 import { useAccount } from '../lib/account'
 import { useMarket } from '../lib/market'
 import { perpLiquidation } from '../lib/valuation'
-import { cls, compactUsd, num, pct, signedPct, usd } from '../lib/format'
+import { changePct, cls, compactUsd, num, usd } from '../lib/format'
 
 function OrderBook({ mid }: { mid: number }) {
   // Synthetic depth around the oracle mid.
@@ -81,18 +81,18 @@ export function Perps() {
             <div className="market-head">
               <div>
                 <h2>
-                  {symbol}-PERP <span className="muted small">{asset.name}</span>
+                  {symbol} PERP <span className="muted small">{asset.name}</span>
                 </h2>
                 <div className="mono big">{usd(mark)}</div>
               </div>
               <div className="market-meta">
                 <div>
                   <div className="muted small">24h change</div>
-                  <div className={cls('mono', ch >= 0 ? 'up' : 'down')}>{signedPct(ch)}</div>
+                  <div className={cls('mono', ch >= 0 ? 'up' : 'down')}>{changePct(ch)}</div>
                 </div>
                 <div>
                   <div className="muted small">Funding / 1h</div>
-                  <div className={cls('mono', funding[symbol] >= 0 ? 'up' : 'down')}>{pct(funding[symbol], 4)}</div>
+                  <div className={cls('mono', funding[symbol] >= 0 ? 'up' : 'down')}>{changePct(funding[symbol], 4)}</div>
                 </div>
                 <div className="hide-sm">
                   <div className="muted small">Open interest</div>

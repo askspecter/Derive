@@ -1,4 +1,6 @@
-# Larry — Derivatives on Robinhood Chain
+# Larry
+
+**Take the edge back. Derivatives for everyone.**
 
 A [Derive](https://www.derive.xyz/)-style onchain derivatives exchange frontend, built for
 [Robinhood Chain](https://docs.robinhood.com/chain/connecting), the Arbitrum Orbit L2 from Robinhood.
@@ -8,7 +10,8 @@ untuk kripto dan saham tertokenisasi.*
 
 ## Features
 
-- **Landing page**: hero, live ticker, market list, feature grid, top vaults
+- **Landing page**: brand hero, markets with live sparklines, products, vaults
+- **Docs**: built in documentation at `#/docs` with search, 12 chapters and previous/next navigation
 - **Options**: options chain (calls/puts, bid/ask, IV smile, delta) priced with Black-Scholes, weekly and
   monthly expiries, an order ticket with greeks, breakeven and margin
 - **Perps**: candlestick chart, order book, long/short up to 20x, liquidation price estimate

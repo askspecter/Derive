@@ -1,163 +1,156 @@
 import { Link } from 'react-router-dom'
 import { ASSETS, VAULTS } from '../config/markets'
-import { ROBINHOOD_CHAIN } from '../config/chains'
 import { AssetIcon } from '../components/AssetIcon'
+import { Sparkline } from '../components/Sparkline'
 import { useMarket } from '../lib/market'
-import { useWallet } from '../lib/wallet'
-import { Ticker } from '../components/Ticker'
-import { cls, compactUsd, num, pct, signedPct } from '../lib/format'
+import { changePct, cls, compactUsd, num, pct } from '../lib/format'
 
-const FEATURES = [
+const PRODUCTS = [
   {
-    title: 'Options on everything',
-    body: 'European, cash-settled options on ETH, BTC, SOL and tokenized stocks like HOOD, TSLA and NVDA. Weekly and monthly expiries.',
-    icon: '◇',
+    to: '/options',
+    tag: 'Options',
+    title: 'Options on every market',
+    body: 'Calls and puts on crypto and tokenized stocks. Weekly and monthly expiries, cash settled, priced live.',
   },
   {
-    title: 'Perpetuals up to 20x',
-    body: 'Trade perps against the same portfolio margin account. Funding paid hourly, marks from a decentralized oracle.',
-    icon: '∞',
+    to: '/perps',
+    tag: 'Perpetuals',
+    title: 'Perps up to 20x',
+    body: 'Go long or short with one margin account. Funding settles every hour against the oracle price.',
   },
   {
-    title: 'Portfolio margin',
-    body: 'One subaccount, cross-collateralized. Hedged option and perp books net out, so you post margin on risk — not on notional.',
-    icon: '⊞',
-  },
-  {
-    title: 'Structured vaults',
-    body: 'Covered calls, cash-secured puts and basis trades, executed automatically every week. Deposit once, earn premium.',
-    icon: '◎',
-  },
-  {
-    title: 'Self-custodial',
-    body: 'Your collateral sits in smart contracts on Robinhood Chain. Withdraw any time, verify everything on the explorer.',
-    icon: '⛨',
-  },
-  {
-    title: 'Ethereum security',
-    body: 'Robinhood Chain is an Arbitrum Orbit L2 that posts data to Ethereum. Sub-second blocks and cents-level gas.',
-    icon: '⟠',
+    to: '/vaults',
+    tag: 'Vaults',
+    title: 'Yield on autopilot',
+    body: 'Covered calls, secured puts and basis trades that roll every week. Deposit once and collect premium.',
   },
 ]
 
+const PILLARS = [
+  { n: '01', title: 'Self custody', body: 'Collateral lives in smart contracts you control. Withdraw any time.' },
+  { n: '02', title: 'Portfolio margin', body: 'Hedged books net out, so margin follows real risk instead of notional.' },
+  { n: '03', title: 'Stocks and crypto', body: 'Trade HOOD, TSLA, NVDA and AAPL next to ETH, BTC and SOL, around the clock.' },
+  { n: '04', title: 'Ethereum security', body: 'Robinhood Chain settles to Ethereum with fast blocks and gas that costs cents.' },
+]
+
 export function Home() {
-  const { prices, open24h } = useMarket()
-  const wallet = useWallet()
+  const { prices, open24h, candles } = useMarket()
   const tvl = VAULTS.reduce((s, v) => s + v.tvl, 0) + 61_800_000
 
   return (
     <>
       <section className="hero">
-        <div className="hero-glow" />
+        <div className="hero-bg" />
         <div className="container hero-inner">
-          <div className="pill">
-            <span className="dot" /> Live on {ROBINHOOD_CHAIN.name} mainnet
-          </div>
-          <h1>
-            The onchain derivatives
+          <p className="eyebrow">Options · Perps · Vaults</p>
+          <h1 className="display">
+            Take the edge back
             <br />
-            exchange for <span className="accent">everyone</span>.
+            <span className="dim">Derivatives for everyone</span>
           </h1>
           <p className="lead">
-            Trade options and perpetuals on crypto and tokenized stocks, or earn yield from automated strategies — all
-            self-custodial, all on Robinhood Chain.
+            Trade options and perpetuals on crypto and tokenized stocks, or let a vault do it for you. Onchain, self
+            custodial, built on Robinhood Chain.
           </p>
           <div className="hero-cta">
             <Link to="/options" className="btn btn-accent btn-lg">
               Start trading
             </Link>
-            {!wallet.address ? (
-              <button className="btn btn-ghost btn-lg" onClick={wallet.connect}>
-                Connect wallet
-              </button>
-            ) : (
-              <Link to="/vaults" className="btn btn-ghost btn-lg">
-                Explore vaults
-              </Link>
-            )}
+            <Link to="/docs" className="btn btn-ghost btn-lg">
+              Read the docs
+            </Link>
           </div>
-          <div className="hero-stats">
-            <div>
-              <div className="stat-value">{compactUsd(tvl)}</div>
-              <div className="muted small">Total value locked</div>
-            </div>
-            <div>
-              <div className="stat-value">{compactUsd(4_820_000_000)}</div>
-              <div className="muted small">Cumulative volume</div>
-            </div>
-            <div>
-              <div className="stat-value">{ASSETS.length}</div>
-              <div className="muted small">Markets</div>
-            </div>
-            <div>
-              <div className="stat-value">~$0.01</div>
-              <div className="muted small">Avg. gas per trade</div>
-            </div>
+        </div>
+        <div className="container hero-stats">
+          <div>
+            <span className="eyebrow">Total value locked</span>
+            <b>{compactUsd(tvl)}</b>
+          </div>
+          <div>
+            <span className="eyebrow">Volume</span>
+            <b>{compactUsd(4_820_000_000)}</b>
+          </div>
+          <div>
+            <span className="eyebrow">Markets</span>
+            <b>{ASSETS.length * 2}</b>
+          </div>
+          <div>
+            <span className="eyebrow">Gas per trade</span>
+            <b>$0.01</b>
           </div>
         </div>
       </section>
 
-      <Ticker />
-
       <section className="section container">
         <div className="section-head">
-          <h2>Markets</h2>
+          <div>
+            <p className="eyebrow">01 Markets</p>
+            <h2>Every market, one account</h2>
+          </div>
           <Link to="/options" className="link">
-            View all →
+            Open app →
           </Link>
         </div>
-        <div className="table-wrap card">
-          <table className="table">
-            <thead>
-              <tr>
-                <th>Asset</th>
-                <th className="r">Price</th>
-                <th className="r">24h</th>
-                <th className="r hide-sm">ATM IV</th>
-                <th className="r"></th>
-              </tr>
-            </thead>
-            <tbody>
-              {ASSETS.map((a) => {
-                const ch = prices[a.symbol] / open24h[a.symbol] - 1
-                return (
-                  <tr key={a.symbol}>
-                    <td>
-                      <div className="asset-cell">
-                        <AssetIcon symbol={a.symbol} />
-                        <div>
-                          <b>{a.symbol}</b>
-                          <div className="muted small">{a.name}</div>
-                        </div>
-                        {a.kind === 'stock' && <span className="tag">Stock</span>}
-                      </div>
-                    </td>
-                    <td className="r mono">${num(prices[a.symbol])}</td>
-                    <td className={cls('r mono', ch >= 0 ? 'up' : 'down')}>{signedPct(ch)}</td>
-                    <td className="r mono hide-sm">{pct(a.vol, 1)}</td>
-                    <td className="r">
-                      <Link to={`/options?asset=${a.symbol}`} className="btn btn-sm btn-ghost">
-                        Trade
-                      </Link>
-                    </td>
-                  </tr>
-                )
-              })}
-            </tbody>
-          </table>
+        <div className="market-list">
+          {ASSETS.map((a) => {
+            const ch = prices[a.symbol] / open24h[a.symbol] - 1
+            return (
+              <Link to={`/options?asset=${a.symbol}`} className="market-row" key={a.symbol}>
+                <div className="asset-cell">
+                  <AssetIcon symbol={a.symbol} size={36} />
+                  <div>
+                    <b>{a.symbol}</b>
+                    <div className="muted small">{a.name}</div>
+                  </div>
+                  {a.kind === 'stock' && <span className="tag">Stock</span>}
+                </div>
+                <Sparkline candles={candles[a.symbol]} />
+                <div className="r">
+                  <div className="mono">${num(prices[a.symbol])}</div>
+                  <div className={cls('mono small', ch >= 0 ? 'up' : 'down')}>{changePct(ch)}</div>
+                </div>
+                <div className="r hide-sm">
+                  <div className="mono">{pct(a.vol, 1)}</div>
+                  <div className="muted small">ATM IV</div>
+                </div>
+              </Link>
+            )
+          })}
         </div>
       </section>
 
       <section className="section container">
         <div className="section-head">
-          <h2>Built for serious traders. Simple enough for everyone.</h2>
+          <div>
+            <p className="eyebrow">02 Products</p>
+            <h2>Three ways to trade</h2>
+          </div>
         </div>
-        <div className="feature-grid">
-          {FEATURES.map((f) => (
-            <div className="card feature" key={f.title}>
-              <div className="feature-icon">{f.icon}</div>
-              <h3>{f.title}</h3>
-              <p className="muted">{f.body}</p>
+        <div className="product-grid">
+          {PRODUCTS.map((p) => (
+            <Link to={p.to} className="product" key={p.to}>
+              <span className="eyebrow accent">{p.tag}</span>
+              <h3>{p.title}</h3>
+              <p className="muted">{p.body}</p>
+              <span className="product-go">→</span>
+            </Link>
+          ))}
+        </div>
+      </section>
+
+      <section className="section container">
+        <div className="section-head">
+          <div>
+            <p className="eyebrow">03 Why Larry</p>
+            <h2>Built like a pro desk. Open to everyone.</h2>
+          </div>
+        </div>
+        <div className="pillars">
+          {PILLARS.map((p) => (
+            <div className="pillar" key={p.n}>
+              <span className="mono accent">{p.n}</span>
+              <h3>{p.title}</h3>
+              <p className="muted">{p.body}</p>
             </div>
           ))}
         </div>
@@ -165,7 +158,10 @@ export function Home() {
 
       <section className="section container">
         <div className="section-head">
-          <h2>Top vaults</h2>
+          <div>
+            <p className="eyebrow">04 Vaults</p>
+            <h2>Top yields this week</h2>
+          </div>
           <Link to="/vaults" className="link">
             All vaults →
           </Link>
@@ -176,7 +172,10 @@ export function Home() {
             .slice(0, 3)
             .map((v) => (
               <Link to="/vaults" className="card vault-card" key={v.id}>
-                <div className="muted small">{v.strategy}</div>
+                <div className="vault-top">
+                  <AssetIcon symbol={v.asset} size={32} />
+                  <span className="eyebrow">{v.strategy}</span>
+                </div>
                 <h3>{v.name}</h3>
                 <div className="vault-apy">{pct(v.apy, 1)}</div>
                 <div className="muted small">Est. APY · TVL {compactUsd(v.tvl)}</div>
@@ -186,14 +185,13 @@ export function Home() {
       </section>
 
       <section className="section container">
-        <div className="card cta-card">
-          <div>
-            <h2>Trade where the stocks live.</h2>
-            <p className="muted">
-              Robinhood Chain brings tokenized equities onchain. Larry brings the derivatives layer: hedge, lever up,
-              or earn yield on them 24/7.
-            </p>
-          </div>
+        <div className="cta">
+          <div className="cta-bg" />
+          <h2 className="display small-display">
+            Take the edge back
+            <br />
+            <span className="dim">Derivatives for everyone</span>
+          </h2>
           <Link to="/options" className="btn btn-accent btn-lg">
             Launch app
           </Link>

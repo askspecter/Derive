@@ -62,14 +62,14 @@ export const VAULTS: Vault[] = [
   },
   {
     id: 'hood-csp',
-    name: 'HOOD Cash-Secured Put',
-    strategy: 'Cash-Secured Put',
+    name: 'HOOD Secured Put',
+    strategy: 'Secured Put',
     asset: 'HOOD',
     deposit: 'USDC',
     apy: 0.215,
     tvl: 4_310_000,
     risk: 'Medium',
-    description: 'Sells weekly puts on tokenized HOOD. Get paid to buy the dip at a discount.',
+    description: 'Sells weekly puts on tokenized HOOD, fully backed by USDC. Get paid to buy the dip at a discount.',
   },
   {
     id: 'tsla-cc',
@@ -102,6 +102,6 @@ export const VAULTS: Vault[] = [
     apy: 0.274,
     tvl: 2_190_000,
     risk: 'High',
-    description: 'Sells wings around earnings-free weeks. Profits when NVDA stays in range.',
+    description: 'Sells both wings in quiet weeks without earnings. Profits when NVDA stays in range.',
   },
 ]
