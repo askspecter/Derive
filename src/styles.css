@@ -111,6 +111,7 @@ input[type='range'] { padding: 0; accent-color: var(--accent); border: 0; backgr
 .nav a:hover { color: var(--text); }
 .nav a.active { color: var(--text); background: rgba(255, 255, 255, .06); }
 .header-actions { display: flex; align-items: center; gap: 10px; margin-left: auto; }
+.nav-wallet { display: none; }
 .menu-btn { display: none; flex-direction: column; gap: 4px; background: none; border: 0; padding: 8px; cursor: pointer; }
 .menu-btn span { width: 20px; height: 2px; background: var(--text); border-radius: 2px; }
 
@@ -375,6 +376,9 @@ input[type='range'] { padding: 0; accent-color: var(--accent); border: 0; backgr
 @media (max-width: 900px) {
   .nav { display: none; position: absolute; top: 64px; left: 0; right: 0; flex-direction: column; background: #000; border-bottom: 1px solid var(--border); padding: 12px 16px; }
   .nav.open { display: flex; }
+  .header-wallet { display: none; }
+  .nav-wallet { display: block; padding-top: 12px; margin-top: 8px; border-top: 1px solid var(--border); }
+  .nav-wallet .btn { width: 100%; padding: 13px 18px; }
   .menu-btn { display: flex; }
   .trade-layout, .trade-layout.perps { grid-template-columns: 1fr; }
   .ticket { position: static; }

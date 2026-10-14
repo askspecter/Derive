@@ -27,9 +27,15 @@ export function Header() {
               {n.label}
             </NavLink>
           ))}
+          {/* On phones the wallet button lives inside the menu */}
+          <div className="nav-wallet">
+            <WalletButton onAction={() => setOpen(false)} />
+          </div>
         </nav>
         <div className="header-actions">
-          <WalletButton />
+          <div className="header-wallet">
+            <WalletButton />
+          </div>
           <button className="menu-btn" aria-label="Menu" onClick={() => setOpen((o) => !o)}>
             <span />
             <span />
