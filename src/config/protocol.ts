@@ -42,8 +42,8 @@ export const DEPLOY_NONCE = { pool: 0, perps: 1, options: 2 } as const
  */
 export const DEFAULT_COLLATERAL: Address = '0x5fc5360D0400a0Fd4f2af552ADD042D716F1d168'
 
-/** Market id used onchain for each asset is its index in ASSETS. */
-export const marketIdOf = (symbol: string) => BigInt(ASSETS.findIndex((a) => a.symbol === symbol))
+/** Onchain market id of an asset. */
+export const marketIdOf = (symbol: string) => BigInt(ASSETS.find((a) => a.symbol === symbol)?.id ?? 0)
 
 /** Optional RPC override, used for local testing against a Hardhat node. */
 export const RPC_URL = (env.VITE_RPC_URL as string | undefined) || undefined

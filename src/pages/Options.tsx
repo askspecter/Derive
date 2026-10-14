@@ -3,8 +3,8 @@ import { useSearchParams } from 'react-router-dom'
 import { useConfig, useReadContract, useReadContracts } from 'wagmi'
 import { readContract } from 'wagmi/actions'
 import { formatUnits, parseUnits, zeroAddress, type Address } from 'viem'
-import { ASSETS, assetBySymbol } from '../config/markets'
-import { ADDRESSES, marketIdOf } from '../config/protocol'
+import { ASSETS, assetBySymbol, assetIndex, indexOfMarketId } from '../config/markets'
+import { ADDRESSES } from '../config/protocol'
 import { AssetTabs } from '../components/AssetTabs'
 import { PriceChart } from '../components/PriceChart'
 import { NeedWallet, NotLive, TxNotice } from '../components/Status'
@@ -29,7 +29,7 @@ export function Options() {
   const symbol = assetBySymbol(params.get('asset') ?? 'ETH').symbol
   const asset = assetBySymbol(symbol)
   const p = useProtocol()
-  const idx = Number(marketIdOf(symbol))
+  const idx = assetIndex(symbol)
   const market = p.options.markets[idx]
   const price = p.prices[symbol]
   const history = useFeedHistory(market?.feed, price?.roundId, 8, 80)
@@ -166,7 +166,7 @@ function OptionTicket(props: { symbol: string; idx: number; expiry: number; sel:
     address: ADDRESSES?.options,
     abi: LarryOptionsAbi,
     functionName: 'quote',
-    args: [BigInt(idx), sel?.isCall ?? true, strikeWad, BigInt(expiry), amount],
+    args: [BigInt(ASSETS[idx].id), sel?.isCall ?? true, strikeWad, BigInt(expiry), amount],
     query: { enabled: !!sel && amount > 0n, refetchInterval: 10_000 },
   })
   const [premium, fee, maxPayout] = quote.data ?? [0n, 0n, 0n]
@@ -185,7 +185,7 @@ function OptionTicket(props: { symbol: string; idx: number; expiry: number; sel:
         address: ADDRESSES.options,
         abi: LarryOptionsAbi,
         functionName: 'buy',
-        args: [BigInt(idx), sel.isCall, strikeWad, BigInt(expiry), amount, maxCost],
+        args: [BigInt(ASSETS[idx].id), sel.isCall, strikeWad, BigInt(expiry), amount, maxCost],
       })
     })
 
@@ -287,7 +287,7 @@ export function OptionPositions() {
   const settleAndClaim = (id: bigint, o: OptionRow, settled: boolean) =>
     tx.run('Payout claimed', async () => {
       if (!settled) {
-        const feed = p.options.markets[o.marketId]?.feed
+        const feed = p.options.markets[indexOfMarketId(o.marketId)]?.feed
         if (!feed) throw new Error('Market has no feed')
         tx.setStatus({ kind: 'pending', label: 'Finding the settlement price' })
         const round = await findSettlementRound(feed, o.expiry)
@@ -319,7 +319,7 @@ export function OptionPositions() {
             <tbody>
               {opts.map(({ id, o, payout }, i) => {
                 if (!o) return null
-                const sym = ASSETS[o.marketId]?.symbol ?? '?'
+                const sym = ASSETS[indexOfMarketId(o.marketId)]?.symbol ?? '?'
                 const settlePx = settledQ.data?.[i]?.result as bigint | undefined
                 const settled = !!settlePx && settlePx > 0n
                 const expired = Number(o.expiry) <= nowS

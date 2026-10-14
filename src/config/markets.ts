@@ -1,6 +1,8 @@
 export type AssetKind = 'crypto' | 'stock'
 
 export interface Asset {
+  /** Market id used onchain. Fixed forever: never reuse an id that has been listed. */
+  id: number
   symbol: string
   name: string
   kind: AssetKind
@@ -14,16 +16,22 @@ export interface Asset {
 // Robinhood Chain is home to tokenized equities, so Larry lists stock
 // derivatives next to crypto majors.
 export const ASSETS: Asset[] = [
-  { symbol: 'ETH', name: 'Ethereum', kind: 'crypto', spot: 3420, vol: 0.62, color: '#8c9eff', logo: 'tokens/eth.png' },
-  { symbol: 'BTC', name: 'Bitcoin', kind: 'crypto', spot: 104250, vol: 0.48, color: '#f7931a', logo: 'tokens/btc.svg' },
-  { symbol: 'SOL', name: 'Solana', kind: 'crypto', spot: 182, vol: 0.78, color: '#14f195', logo: 'tokens/sol.svg' },
-  { symbol: 'HOOD', name: 'Robinhood Markets', kind: 'stock', spot: 118.4, vol: 0.58, color: '#ccff00', logo: 'tokens/hood.svg' },
-  { symbol: 'TSLA', name: 'Tesla', kind: 'stock', spot: 412.3, vol: 0.55, color: '#e82127', logo: 'tokens/tsla.svg' },
-  { symbol: 'NVDA', name: 'NVIDIA', kind: 'stock', spot: 186.7, vol: 0.46, color: '#76b900', logo: 'tokens/nvda.svg' },
-  { symbol: 'AAPL', name: 'Apple', kind: 'stock', spot: 247.1, vol: 0.27, color: '#a2aaad', logo: 'tokens/aapl.svg' },
+  { id: 0, symbol: 'ETH', name: 'Ethereum', kind: 'crypto', spot: 3420, vol: 0.62, color: '#8c9eff', logo: 'tokens/eth.png' },
+  { id: 1, symbol: 'BTC', name: 'Bitcoin', kind: 'crypto', spot: 104250, vol: 0.48, color: '#f7931a', logo: 'tokens/btc.svg' },
+  // id 2 was SOL, retired before listing: no Chainlink feed on Robinhood Chain.
+  { id: 3, symbol: 'LINK', name: 'Chainlink', kind: 'crypto', spot: 12.45, vol: 0.75, color: '#2a5ada', logo: 'tokens/link.svg' },
+  { id: 4, symbol: 'TSLA', name: 'Tesla', kind: 'stock', spot: 412.3, vol: 0.55, color: '#e82127', logo: 'tokens/tsla.svg' },
+  { id: 5, symbol: 'NVDA', name: 'NVIDIA', kind: 'stock', spot: 186.7, vol: 0.46, color: '#76b900', logo: 'tokens/nvda.svg' },
+  { id: 6, symbol: 'AAPL', name: 'Apple', kind: 'stock', spot: 247.1, vol: 0.27, color: '#a2aaad', logo: 'tokens/aapl.svg' },
 ]
 
 export const assetBySymbol = (s: string) => ASSETS.find((a) => a.symbol === s) ?? ASSETS[0]
+
+/** Position of an asset in ASSETS, used to index the per asset arrays in protocol state. */
+export const assetIndex = (symbol: string) => Math.max(0, ASSETS.findIndex((a) => a.symbol === symbol))
+
+/** Position in ASSETS of an onchain market id, or -1 when the id isn't shown. */
+export const indexOfMarketId = (id: number) => ASSETS.findIndex((a) => a.id === id)
 
 export interface Vault {
   id: string
@@ -59,17 +67,6 @@ export const VAULTS: Vault[] = [
     tvl: 9_870_000,
     risk: 'Low',
     description: 'Lends USDC for base yield and spends the interest on BTC call spreads for upside exposure.',
-  },
-  {
-    id: 'hood-csp',
-    name: 'HOOD Secured Put',
-    strategy: 'Secured Put',
-    asset: 'HOOD',
-    deposit: 'USDC',
-    apy: 0.215,
-    tvl: 4_310_000,
-    risk: 'Medium',
-    description: 'Sells weekly puts on tokenized HOOD, fully backed by USDC. Get paid to buy the dip at a discount.',
   },
   {
     id: 'tsla-cc',

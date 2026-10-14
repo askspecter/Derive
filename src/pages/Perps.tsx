@@ -2,8 +2,8 @@ import { useState } from 'react'
 import { useSearchParams } from 'react-router-dom'
 import { useReadContract, useReadContracts } from 'wagmi'
 import { erc20Abi, formatUnits, parseUnits, zeroAddress, type Address } from 'viem'
-import { ASSETS, assetBySymbol } from '../config/markets'
-import { ADDRESSES, marketIdOf } from '../config/protocol'
+import { ASSETS, assetBySymbol, assetIndex, indexOfMarketId } from '../config/markets'
+import { ADDRESSES } from '../config/protocol'
 import { AssetTabs } from '../components/AssetTabs'
 import { PriceChart } from '../components/PriceChart'
 import { NeedWallet, NotLive, TxNotice } from '../components/Status'
@@ -21,7 +21,7 @@ export function Perps() {
   const symbol = assetBySymbol(params.get('asset') ?? 'ETH').symbol
   const asset = assetBySymbol(symbol)
   const p = useProtocol()
-  const idx = Number(marketIdOf(symbol))
+  const idx = assetIndex(symbol)
   const market = p.perps.markets[idx]
   const price = p.prices[symbol]
   const history = useFeedHistory(market?.feed, price?.roundId, 8, 80)
@@ -150,7 +150,7 @@ function PerpTicket({ symbol, idx }: { symbol: string; idx: number }) {
         address: ADDRESSES.perps,
         abi: LarryPerpsAbi,
         functionName: 'openPosition',
-        args: [BigInt(idx), side === 'long', collateral, size, acceptable],
+        args: [BigInt(ASSETS[idx].id), side === 'long', collateral, size, acceptable],
       })
     })
 
@@ -272,7 +272,7 @@ export function PerpPositions() {
                 const st = details.data?.[3 * i + 1]?.result as readonly [bigint, bigint, bigint, bigint, boolean] | undefined
                 const liq = details.data?.[3 * i + 2]?.result as bigint | undefined
                 if (!pos) return null
-                const sym = ASSETS[pos.marketId]?.symbol ?? '?'
+                const sym = ASSETS[indexOfMarketId(pos.marketId)]?.symbol ?? '?'
                 const equity = st ? p.amount(st[3]) : 0
                 const pnl = equity - p.amount(pos.collateral)
                 return (

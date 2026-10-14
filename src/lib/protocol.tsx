@@ -129,11 +129,11 @@ export function ProtocolProvider({ children }: { children: ReactNode }) {
       { address: options, abi: LarryOptionsAbi, functionName: 'owner' },
       { address: options, abi: LarryOptionsAbi, functionName: 'paused' },
       { address: options, abi: LarryOptionsAbi, functionName: 'protocolFeeBps' },
-      ...ASSETS.map((_, i) => ({ address: perps, abi: LarryPerpsAbi, functionName: 'markets', args: [BigInt(i)] }) as const),
-      ...ASSETS.map((_, i) => ({ address: perps, abi: LarryPerpsAbi, functionName: 'openInterestLong', args: [BigInt(i)] }) as const),
-      ...ASSETS.map((_, i) => ({ address: perps, abi: LarryPerpsAbi, functionName: 'openInterestShort', args: [BigInt(i)] }) as const),
-      ...ASSETS.map((_, i) => ({ address: options, abi: LarryOptionsAbi, functionName: 'markets', args: [BigInt(i)] }) as const),
-      ...ASSETS.map((_, i) => ({ address: options, abi: LarryOptionsAbi, functionName: 'openNotional', args: [BigInt(i)] }) as const),
+      ...ASSETS.map((_, i) => ({ address: perps, abi: LarryPerpsAbi, functionName: 'markets', args: [BigInt(ASSETS[i].id)] }) as const),
+      ...ASSETS.map((_, i) => ({ address: perps, abi: LarryPerpsAbi, functionName: 'openInterestLong', args: [BigInt(ASSETS[i].id)] }) as const),
+      ...ASSETS.map((_, i) => ({ address: perps, abi: LarryPerpsAbi, functionName: 'openInterestShort', args: [BigInt(ASSETS[i].id)] }) as const),
+      ...ASSETS.map((_, i) => ({ address: options, abi: LarryOptionsAbi, functionName: 'markets', args: [BigInt(ASSETS[i].id)] }) as const),
+      ...ASSETS.map((_, i) => ({ address: options, abi: LarryOptionsAbi, functionName: 'openNotional', args: [BigInt(ASSETS[i].id)] }) as const),
   ]
   const core = useReadContracts({
     allowFailure: true,

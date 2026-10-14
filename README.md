@@ -29,8 +29,8 @@ Chain config lives in `src/config/chains.ts`.
 
 ## Asset logos
 
-Logos are bundled in `public/tokens`. ETH uses the Robinhood feather mark; BTC and SOL come from
-`cryptocurrency-icons`, and the stock logos (HOOD, TSLA, NVDA, AAPL) are the official marks from
+Logos are bundled in `public/tokens`. ETH uses the Robinhood feather mark; BTC and LINK come from
+`cryptocurrency-icons`, and the stock logos (TSLA, NVDA, AAPL) are the official marks from
 `simple-icons` on brand-coloured badges. Logos are trademarks of their respective owners.
 
 ## Launch checklist

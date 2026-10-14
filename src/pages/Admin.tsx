@@ -491,7 +491,7 @@ function MarketRow({ idx }: { idx: number }) {
         abi: LarryPerpsAbi,
         functionName: 'setMarket',
         args: [
-          BigInt(idx),
+          BigInt(a.id),
           {
             feed: feed as Address,
             heartbeat: Number(pf.heartbeat),
@@ -515,7 +515,7 @@ function MarketRow({ idx }: { idx: number }) {
         abi: LarryOptionsAbi,
         functionName: 'setMarket',
         args: [
-          BigInt(idx),
+          BigInt(a.id),
           {
             feed: feed as Address,
             heartbeat: Number(of.heartbeat),
@@ -532,8 +532,8 @@ function MarketRow({ idx }: { idx: number }) {
   const toggle = (product: 'perps' | 'options', enabled: boolean) =>
     tx.run(`${a.symbol} ${product} ${enabled ? 'enabled' : 'disabled'}`, () =>
       product === 'perps'
-        ? tx.write('Toggle market', { address: opts.perps, abi: LarryPerpsAbi, functionName: 'setMarketEnabled', args: [BigInt(idx), enabled] })
-        : tx.write('Toggle market', { address: opts.options, abi: LarryOptionsAbi, functionName: 'setMarketEnabled', args: [BigInt(idx), enabled] }),
+        ? tx.write('Toggle market', { address: opts.perps, abi: LarryPerpsAbi, functionName: 'setMarketEnabled', args: [BigInt(a.id), enabled] })
+        : tx.write('Toggle market', { address: opts.options, abi: LarryOptionsAbi, functionName: 'setMarketEnabled', args: [BigInt(a.id), enabled] }),
     )
 
   const pfSet = (k: keyof PerpForm) => (v: string) => setPf({ ...pf, [k]: v })
