@@ -56,7 +56,17 @@ async function waitText(page, text, timeout = 60000) {
     await page.getByRole('button', { name: 'Connect', exact: true }).click()
     await waitText(page, 'Products connected')
     await waitText(page, '02')
-    log('products connected, protocol live')
+    log('products connected')
+    if (process.env.STAGE === 'flex') {
+      // Used wallet: the site can't derive addresses, so it must show them for the hosting settings.
+      await waitText(page, 'Last step: tell the site where the contracts are')
+      const env = await page.locator('pre.code').innerText()
+      if (!/VITE_LARRY_POOL=0x[0-9a-fA-F]{40}/.test(env)) throw new Error('env lines missing')
+      await shot('flex-deployed')
+      log('used wallet deploy worked, env lines:', env.replace(/\n/g, ' '))
+      return
+    }
+    log('protocol live')
     await shot('1-admin-deployed')
 
     // ---------------------------------------------------------- admin: markets
@@ -67,6 +77,7 @@ async function waitText(page, text, timeout = 60000) {
       await row.getByText(`${sym} / USD`).waitFor({ timeout: 20000 })
       await row.getByRole('button', { name: 'List perps' }).click()
       await row.getByText(`${sym} perps saved`).waitFor({ timeout: 60000 })
+      await page.waitForTimeout(1500) // let the listing refresh settle before the next click
       await row.getByRole('button', { name: 'List options' }).click()
       await row.getByText(`${sym} options saved`).waitFor({ timeout: 60000 })
       log(`${sym} listed`)

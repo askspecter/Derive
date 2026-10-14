@@ -25,6 +25,11 @@ for (const who of [accts[1], accts[2]]) {
   const h = await w.writeContract({ address: usdg, abi: mocks.MockERC20.abi, functionName: 'mint', args: [who, parseUnits('1000000', 6)] })
   await pub.waitForTransactionReceipt({ hash: h })
 }
+// USED_ADMIN=1 simulates an admin wallet that already sent transactions before deploying.
+if (process.env.USED_ADMIN) {
+  const aw = createWalletClient({ account: accts[0], chain, transport: http(RPC) })
+  for (let i = 0; i < 2; i++) await pub.waitForTransactionReceipt({ hash: await aw.sendTransaction({ to: accts[8], value: 1n }) })
+}
 const out = { usdg, feeds, admin: accts[0], trader: accts[1], lp: accts[2], infra }
 fs.writeFileSync(process.argv[2] ?? 'e2e-env.json', JSON.stringify(out, null, 2))
 console.log(JSON.stringify({ usdg, eth: feeds.ETH, admin: accts[0] }))

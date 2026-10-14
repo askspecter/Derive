@@ -1,10 +1,10 @@
 import { useEffect, useState, type ReactNode } from 'react'
-import { useConfig, useDeployContract, useReadContract, useReadContracts, useTransactionCount } from 'wagmi'
+import { useBytecode, useConfig, useDeployContract, useReadContract, useReadContracts, useTransactionCount } from 'wagmi'
 import { waitForTransactionReceipt } from 'wagmi/actions'
 import { erc20Abi, formatUnits, getAddress, getContractAddress, isAddress, parseUnits, zeroAddress, type Address } from 'viem'
 import { robinhood } from '@reown/appkit/networks'
 import { ASSETS } from '../config/markets'
-import { ADDRESSES, ADMIN, DEFAULT_COLLATERAL, DEPLOY_NONCE } from '../config/protocol'
+import { ADDRESSES, ADMIN, DEFAULT_COLLATERAL } from '../config/protocol'
 import { ROBINHOOD_CHAIN } from '../config/chains'
 import { AssetIcon } from '../components/AssetIcon'
 import { NeedWallet, TxNotice } from '../components/Status'
@@ -131,14 +131,55 @@ export function Admin() {
 
 // ------------------------------------------------------------------ deploy
 
-function DeploySteps({ deployer, addresses }: { deployer: Address; addresses: { pool: Address; perps: Address; options: Address } }) {
+type Key = 'pool' | 'perps' | 'options'
+type Addrs = { pool: Address; perps: Address; options: Address }
+type MaybeAddrs = Partial<Addrs>
+
+function DeploySteps({ deployer, addresses }: { deployer: Address; addresses: Addrs }) {
   const p = useProtocol()
   const tx = useTx()
   const config = useConfig()
   const { deployContractAsync } = useDeployContract()
-  const nonce = useTransactionCount({ address: deployer, query: { refetchInterval: 8000 } })
   const [collateral, setCollateral] = useState<string>(DEFAULT_COLLATERAL)
   const [cap, setCap] = useState('50000')
+  const [copied, setCopied] = useState(false)
+
+  // Addresses come from the deploy receipts when the wallet wasn't fresh, so they are kept
+  // in this browser until they are set as VITE_LARRY_* in the hosting settings.
+  const storeKey = `larry:deploy:${deployer.toLowerCase()}`
+  const [local, setLocal] = useState<MaybeAddrs>(() => {
+    try {
+      return JSON.parse(localStorage.getItem(storeKey) ?? '{}')
+    } catch {
+      return {}
+    }
+  })
+  const save = (k: Key, a: Address) =>
+    setLocal((prev) => {
+      const next = { ...prev, [k]: a }
+      try {
+        localStorage.setItem(storeKey, JSON.stringify(next))
+      } catch {}
+      return next
+    })
+  const has = (c: { data?: string }) => !!c.data && c.data !== '0x'
+  const nonce = useTransactionCount({ address: deployer, query: { refetchInterval: 8000 } })
+  const predictedPool = useBytecode({ address: addresses.pool, query: { refetchInterval: 8000 } })
+  // The precomputed addresses only hold when the wallet was fresh. Once it has sent other
+  // transactions, trust nothing but the addresses recorded from this browser's deploy receipts.
+  const usedWallet = !!local.pool || (!has(predictedPool) && (nonce.data ?? 0) > 0)
+  const pick = (k: Key) => (usedWallet ? local[k] : (local[k] ?? addresses[k]))
+  const addr = { pool: pick('pool'), perps: pick('perps'), options: pick('options') }
+
+  const poolCode = useBytecode({ address: addr.pool, query: { enabled: !!addr.pool, refetchInterval: 8000 } })
+  const perpsCode = useBytecode({ address: addr.perps, query: { enabled: !!addr.perps, refetchInterval: 8000 } })
+  const optionsCode = useBytecode({ address: addr.options, query: { enabled: !!addr.options, refetchInterval: 8000 } })
+  const done = {
+    pool: !!addr.pool && has(poolCode),
+    perps: !!addr.perps && has(perpsCode),
+    options: !!addr.options && has(optionsCode),
+  }
+  const pool = addr.pool ?? zeroAddress
 
   const code = useReadContracts({
     allowFailure: true,
@@ -154,33 +195,43 @@ function DeploySteps({ deployer, addresses }: { deployer: Address; addresses: { 
   const wired = useReadContracts({
     allowFailure: true,
     contracts: [
-      { address: addresses.pool, abi: LarryPoolAbi, functionName: 'isProduct', args: [addresses.perps] },
-      { address: addresses.pool, abi: LarryPoolAbi, functionName: 'isProduct', args: [addresses.options] },
+      { address: pool, abi: LarryPoolAbi, functionName: 'isProduct', args: [addr.perps ?? zeroAddress] },
+      { address: pool, abi: LarryPoolAbi, functionName: 'isProduct', args: [addr.options ?? zeroAddress] },
     ],
-    query: { enabled: p.deployed.pool, refetchInterval: 8000 },
+    query: { enabled: done.pool, refetchInterval: 8000 },
   })
   const perpsWired = wired.data?.[0]?.result === true
   const optionsWired = wired.data?.[1]?.result === true
 
-  const deployed = p.deployed
-  const n = nonce.data ?? 0
-
-  async function deploy(label: string, expectedNonce: number, run: () => Promise<`0x${string}`>) {
+  async function deploy(label: string, key: Key, run: () => Promise<`0x${string}`>) {
     await tx.run(`${label} deployed`, async () => {
-      if (n !== expectedNonce)
-        throw new Error(`The admin wallet is at nonce ${n}, but this deployment needs nonce ${expectedNonce}. Use a fresh wallet.`)
       tx.setStatus({ kind: 'pending', label: `${label}: confirm in your wallet` })
-      const hash = await run()
+      let hash: `0x${string}`
+      try {
+        hash = await run()
+      } catch (e) {
+        if (/invalid param|missing or invalid|not supported|unsupported/i.test(String((e as Error)?.message)))
+          throw new Error(
+            'Your wallet refused the deployment. Many mobile wallets can’t deploy contracts. Open this page on a computer with MetaMask or Rabby and deploy from there.',
+          )
+        throw e
+      }
       tx.setStatus({ kind: 'pending', label: `${label}: waiting for confirmation` })
-      await waitForTransactionReceipt(config, { hash })
+      const receipt = await waitForTransactionReceipt(config, { hash })
+      if (receipt.status !== 'success' || !receipt.contractAddress) throw new Error(`${label} deployment failed onchain. Try again with more gas.`)
+      save(key, getAddress(receipt.contractAddress))
       p.refetch()
     })
   }
 
+  const allDone = done.pool && done.perps && done.options && perpsWired && optionsWired
+  const siteKnows = !!ADDRESSES && ADDRESSES.pool === addr.pool && ADDRESSES.perps === addr.perps && ADDRESSES.options === addr.options
+  const envLines = `VITE_LARRY_POOL=${addr.pool ?? ''}\nVITE_LARRY_PERPS=${addr.perps ?? ''}\nVITE_LARRY_OPTIONS=${addr.options ?? ''}`
+
   const steps: { title: string; done: boolean; body: ReactNode; action?: ReactNode }[] = [
     {
       title: 'Deploy the liquidity vault',
-      done: deployed.pool,
+      done: done.pool,
       body: (
         <div className="form-grid">
           <Field label="Collateral token" suffix={tokenSymbol ? `${tokenSymbol}, ${tokenDecimals} decimals` : 'not a token'} value={collateral} onChange={setCollateral} wide />
@@ -190,9 +241,9 @@ function DeploySteps({ deployer, addresses }: { deployer: Address; addresses: { 
       action: (
         <button
           className="btn btn-accent"
-          disabled={tx.busy || deployed.pool || !tokenSymbol || tokenDecimals == null}
+          disabled={tx.busy || done.pool || !tokenSymbol || tokenDecimals == null}
           onClick={() =>
-            deploy('Vault', DEPLOY_NONCE.pool, () =>
+            deploy('Vault', 'pool', () =>
               deployContractAsync({ chainId: robinhood.id, abi: LarryPoolAbi, bytecode: LarryPoolBytecode, args: [collateral as Address, parseUnits(cap || '0', tokenDecimals!)] }),
             )
           }
@@ -203,13 +254,13 @@ function DeploySteps({ deployer, addresses }: { deployer: Address; addresses: { 
     },
     {
       title: 'Deploy perpetuals',
-      done: deployed.perps,
-      body: <p className="muted small">Points at the vault at {shortAddr(addresses.pool)}.</p>,
+      done: done.perps,
+      body: <p className="muted small">Points at the vault at {shortAddr(pool)}.</p>,
       action: (
         <button
           className="btn btn-accent"
-          disabled={tx.busy || !deployed.pool || deployed.perps}
-          onClick={() => deploy('Perps', DEPLOY_NONCE.perps, () => deployContractAsync({ chainId: robinhood.id, abi: LarryPerpsAbi, bytecode: LarryPerpsBytecode, args: [addresses.pool] }))}
+          disabled={tx.busy || !done.pool || done.perps}
+          onClick={() => deploy('Perps', 'perps', () => deployContractAsync({ chainId: robinhood.id, abi: LarryPerpsAbi, bytecode: LarryPerpsBytecode, args: [pool] }))}
         >
           Deploy perps
         </button>
@@ -217,13 +268,13 @@ function DeploySteps({ deployer, addresses }: { deployer: Address; addresses: { 
     },
     {
       title: 'Deploy options',
-      done: deployed.options,
-      body: <p className="muted small">Points at the vault at {shortAddr(addresses.pool)}.</p>,
+      done: done.options,
+      body: <p className="muted small">Points at the vault at {shortAddr(pool)}.</p>,
       action: (
         <button
           className="btn btn-accent"
-          disabled={tx.busy || !deployed.perps || deployed.options}
-          onClick={() => deploy('Options', DEPLOY_NONCE.options, () => deployContractAsync({ chainId: robinhood.id, abi: LarryOptionsAbi, bytecode: LarryOptionsBytecode, args: [addresses.pool] }))}
+          disabled={tx.busy || !done.perps || done.options}
+          onClick={() => deploy('Options', 'options', () => deployContractAsync({ chainId: robinhood.id, abi: LarryOptionsAbi, bytecode: LarryOptionsBytecode, args: [pool] }))}
         >
           Deploy options
         </button>
@@ -236,13 +287,13 @@ function DeploySteps({ deployer, addresses }: { deployer: Address; addresses: { 
       action: (
         <button
           className="btn btn-accent"
-          disabled={tx.busy || !deployed.options || (perpsWired && optionsWired)}
+          disabled={tx.busy || !done.options || (perpsWired && optionsWired)}
           onClick={() =>
             tx.run('Products connected', async () => {
               if (!perpsWired)
-                await tx.write('Enable perps', { address: addresses.pool, abi: LarryPoolAbi, functionName: 'setProduct', args: [addresses.perps, true] })
+                await tx.write('Enable perps', { address: pool, abi: LarryPoolAbi, functionName: 'setProduct', args: [addr.perps!, true] })
               if (!optionsWired)
-                await tx.write('Enable options', { address: addresses.pool, abi: LarryPoolAbi, functionName: 'setProduct', args: [addresses.options, true] })
+                await tx.write('Enable options', { address: pool, abi: LarryPoolAbi, functionName: 'setProduct', args: [addr.options!, true] })
               p.refetch()
             })
           }
@@ -254,15 +305,7 @@ function DeploySteps({ deployer, addresses }: { deployer: Address; addresses: { 
   ]
 
   return (
-    <Section
-      n="01"
-      title="Deploy"
-      hint={
-        <>
-          Admin wallet nonce is {n}. Contracts land at fixed addresses derived from it, so do these in order from a fresh wallet.
-        </>
-      }
-    >
+    <Section n="01" title="Deploy" hint="Deploy from a computer with MetaMask or Rabby. Most mobile wallets refuse contract deployments.">
       <ol className="deploy-steps">
         {steps.map((s, i) => (
           <li key={s.title} className={cls(s.done && 'done')}>
@@ -270,17 +313,45 @@ function DeploySteps({ deployer, addresses }: { deployer: Address; addresses: { 
             <div className="deploy-body">
               <b>{s.title}</b>
               {!s.done && s.body}
-              {i < 3 && (
-                <a className="mono small muted" href={explorer(Object.values(addresses)[i])} target="_blank" rel="noreferrer">
-                  {Object.values(addresses)[i]}
-                </a>
-              )}
+              {i < 3 &&
+                (() => {
+                  const a = [addr.pool, addr.perps, addr.options][i]
+                  return a ? (
+                    <a className="mono small muted" href={explorer(a)} target="_blank" rel="noreferrer">
+                      {a}
+                    </a>
+                  ) : (
+                    <span className="mono small muted">Address assigned when deployed</span>
+                  )
+                })()}
             </div>
             {!s.done && s.action}
           </li>
         ))}
       </ol>
       <TxNotice status={tx.status} />
+      {done.pool && !siteKnows && (
+        <div className="callout">
+          <b>Last step: tell the site where the contracts are</b>
+          <div>
+            Add these {allDone ? '' : '(after all steps are done) '}as environment variables in Vercel, Settings, Environment Variables, then
+            redeploy the site:
+            <pre className="code">{envLines}</pre>
+            <button
+              className="btn btn-ghost btn-sm"
+              onClick={async () => {
+                try {
+                  await navigator.clipboard.writeText(envLines)
+                  setCopied(true)
+                  setTimeout(() => setCopied(false), 1500)
+                } catch {}
+              }}
+            >
+              {copied ? 'Copied' : 'Copy all'}
+            </button>
+          </div>
+        </div>
+      )}
     </Section>
   )
 }
@@ -390,7 +461,9 @@ function MarketRow({ idx }: { idx: number }) {
   useEffect(() => {
     if (perp) setPf(perpDefaults(a.kind, perp, p.amount))
     if (opt) setOf(optDefaults(a.kind, a.vol, opt, p.amount))
-    if (perp?.feed || opt?.feed) setFeed(perp?.feed ?? opt?.feed ?? '')
+    const saved = perp?.feed ?? opt?.feed
+    // Only replace the input when it holds a different feed, so a re-render doesn't reload the feed check.
+    if (saved) setFeed((cur) => (cur.toLowerCase() === saved.toLowerCase() ? cur : saved))
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [perp?.feed, opt?.feed])
 
