@@ -20,7 +20,7 @@ export interface Asset {
 export const ASSETS: Asset[] = [
   { id: 0, symbol: 'ETH', name: 'Ethereum', kind: 'crypto', spot: 3420, vol: 0.62, color: '#8c9eff', logo: 'tokens/eth.png' },
   { id: 1, symbol: 'BTC', name: 'Bitcoin', kind: 'crypto', spot: 104250, vol: 0.48, color: '#f7931a', logo: 'tokens/btc.svg' },
-  // id 2 was SOL, retired before listing: no Chainlink feed on Robinhood Chain.
+  { id: 2, symbol: 'SOL', name: 'Solana', kind: 'crypto', spot: 182, vol: 0.78, color: '#14f195', logo: 'tokens/sol.svg' },
   { id: 3, symbol: 'LINK', name: 'Chainlink', kind: 'crypto', spot: 12.45, vol: 0.75, color: '#2a5ada', logo: 'tokens/link.svg' },
   { id: 4, symbol: 'TSLA', name: 'Tesla', kind: 'stock', spot: 412.3, vol: 0.55, color: '#e82127', logo: 'tokens/tsla.svg' },
   { id: 5, symbol: 'NVDA', name: 'NVIDIA', kind: 'stock', spot: 186.7, vol: 0.46, color: '#76b900', logo: 'tokens/nvda.svg' },
@@ -38,12 +38,7 @@ export const ASSETS: Asset[] = [
   { id: 17, symbol: 'INTC', name: 'Intel', kind: 'stock', spot: 24, vol: 0.45, color: '#0071C5', logo: 'tokens/intc.svg' },
   { id: 18, symbol: 'MU', name: 'Micron', kind: 'stock', spot: 160, vol: 0.5, color: '#0069B4', logo: 'tokens/mu.svg' },
   { id: 19, symbol: 'ORCL', name: 'Oracle', kind: 'stock', spot: 290, vol: 0.4, color: '#F80000', logo: 'tokens/orcl.svg' },
-  { id: 20, symbol: 'ASML', name: 'ASML', kind: 'stock', spot: 980, vol: 0.38, color: '#10069F', logo: 'tokens/asml.svg' },
-  { id: 21, symbol: 'BABA', name: 'Alibaba', kind: 'stock', spot: 170, vol: 0.45, color: '#FF6A00', logo: 'tokens/baba.svg' },
-  { id: 22, symbol: 'CRCL', name: 'Circle', kind: 'stock', spot: 140, vol: 0.9, color: '#1A1F36', logo: 'tokens/crcl.svg' },
-  { id: 23, symbol: 'IONQ', name: 'IonQ', kind: 'stock', spot: 60, vol: 0.9, color: '#4B2E83', logo: 'tokens/ionq.svg' },
-  { id: 24, symbol: 'RKLB', name: 'Rocket Lab', kind: 'stock', spot: 55, vol: 0.85, color: '#111111', logo: 'tokens/rklb.svg' },
-  { id: 25, symbol: 'DELL', name: 'Dell', kind: 'stock', spot: 135, vol: 0.45, color: '#007DB8', logo: 'tokens/dell.svg' },
+  // ids 20 to 25 (ASML, BABA, CRCL, IONQ, RKLB, DELL) are retired. Never reuse an id.
 ]
 
 export const assetBySymbol = (s: string) => ASSETS.find((a) => a.symbol === s) ?? ASSETS[0]
