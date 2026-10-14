@@ -16,6 +16,10 @@ export function errorMessage(e: unknown): string {
       if (name) return humanize(name)
     }
     if (/User rejected|denied/i.test(e.message)) return 'Request rejected in wallet.'
+    // -32602 comes from the wallet itself, before anything reaches the chain.
+    const invalid = e.walk((x) => (x as { code?: number }).code === -32602)
+    if (invalid || /missing or invalid parameters/i.test(e.message))
+      return 'Your wallet refused this request. It probably does not support Robinhood Chain or contract deployments. Use MetaMask or Rabby, ideally the browser extension on a computer.'
     return e.shortMessage
   }
   return e instanceof Error ? e.message : String(e)
