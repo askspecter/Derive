@@ -44,8 +44,8 @@ export function Footer() {
       <div className="container footer-note">
         <span>© {new Date().getFullYear()} Larry</span>
         <span>
-          Independent project, not affiliated with Robinhood Markets, Inc. Preview release: prices are simulated and
-          trades are paper positions.
+          Independent project, not affiliated with Robinhood Markets, Inc. Contracts are unaudited. Trade at your own
+          risk.
         </span>
       </div>
     </footer>

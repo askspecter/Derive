@@ -1,9 +1,9 @@
 import { useEffect, useMemo, useState, type ReactNode } from 'react'
 import { Link, NavLink, useParams } from 'react-router-dom'
 import { ROBINHOOD_CHAIN } from '../config/chains'
-import { ASSETS, VAULTS } from '../config/markets'
+import { ASSETS } from '../config/markets'
+import { ADDRESSES } from '../config/protocol'
 import { AssetIcon } from '../components/AssetIcon'
-import { pct } from '../lib/format'
 
 interface Page {
   slug: string
@@ -44,25 +44,28 @@ const PAGES: Page[] = [
     body: (
       <>
         <p>
-          Larry is an onchain derivatives exchange on Robinhood Chain. You can trade options and perpetual futures on
-          crypto and tokenized stocks, or deposit into vaults that run options strategies for you.
+          Larry is an onchain derivatives exchange on Robinhood Chain. You can trade perpetual futures and options on
+          crypto and tokenized stocks, or deposit into the Larry vault and act as the house.
         </p>
-        <p>Everything runs from a single margin account that you control with your own wallet.</p>
+        <p>
+          Every trade settles in USDG, the Paxos Global Dollar on Robinhood Chain, and every price comes from
+          Chainlink, the chain&apos;s official oracle.
+        </p>
         <div className="doc-cards">
-          <Link to="/docs/options" className="doc-card">
-            <span className="eyebrow accent">Trade</span>
-            <b>Options</b>
-            <span className="muted">Calls and puts with weekly and monthly expiries.</span>
-          </Link>
           <Link to="/docs/perpetuals" className="doc-card">
             <span className="eyebrow accent">Trade</span>
             <b>Perpetuals</b>
-            <span className="muted">Long or short with up to 20x leverage.</span>
+            <span className="muted">Long or short with isolated margin and leverage.</span>
           </Link>
-          <Link to="/docs/vaults" className="doc-card">
+          <Link to="/docs/options" className="doc-card">
+            <span className="eyebrow accent">Trade</span>
+            <b>Options</b>
+            <span className="muted">Buy calls and puts with weekly Friday expiries.</span>
+          </Link>
+          <Link to="/docs/vault" className="doc-card">
             <span className="eyebrow accent">Earn</span>
-            <b>Vaults</b>
-            <span className="muted">Automated strategies that roll every week.</span>
+            <b>Vault</b>
+            <span className="muted">Provide liquidity and earn what traders pay.</span>
           </Link>
           <Link to="/docs/quickstart" className="doc-card">
             <span className="eyebrow accent">Start</span>
@@ -70,25 +73,21 @@ const PAGES: Page[] = [
             <span className="muted">From wallet to first trade in five minutes.</span>
           </Link>
         </div>
-        <h2>Why Larry</h2>
+        <h2>How it fits together</h2>
         <ul>
           <li>
-            <b>Self custody.</b> Your collateral sits in smart contracts, never with a broker.
+            <b>LarryPool</b> holds the vault liquidity and is the counterparty to every trade.
           </li>
           <li>
-            <b>Stocks and crypto together.</b> HOOD, TSLA, NVDA and AAPL trade next to ETH, BTC and SOL, around the
-            clock.
+            <b>LarryPerps</b> runs perpetual positions and liquidations.
           </li>
           <li>
-            <b>Portfolio margin.</b> Positions that hedge each other reduce the margin you post.
-          </li>
-          <li>
-            <b>Low cost.</b> Robinhood Chain gas costs cents, so small traders are not priced out.
+            <b>LarryOptions</b> sells options, settles each expiry from Chainlink and pays winners.
           </li>
         </ul>
-        <Callout title="Preview release">
-          Larry is in preview. Prices come from a simulated feed and every trade is a paper position stored in your
-          browser. No real funds are used until the protocol contracts launch.
+        <Callout kind="warn" title="Early protocol">
+          The Larry contracts have not been audited yet. Caps on deposits and open interest keep exposure small while
+          the protocol is young. Only use funds you can afford to lose.
         </Callout>
       </>
     ),
@@ -99,33 +98,30 @@ const PAGES: Page[] = [
     title: 'Quickstart',
     summary: 'Connect a wallet and place your first trade.',
     body: (
-      <>
-        <Steps
-          items={[
-            <>
-              <b>Install a wallet.</b> Robinhood Wallet, MetaMask, Rabby, Coinbase Wallet or any of the 500+
-              wallets supported through Reown and WalletConnect.
-            </>,
-            <>
-              <b>Connect.</b> Press <span className="kbd">Connect wallet</span> in the top right and pick your
-              wallet from the list, or scan the QR code with a mobile wallet. Larry asks your wallet to switch to
-              Robinhood Chain and adds the network if it is missing.
-            </>,
-            <>
-              <b>Fund your account.</b> Bridge ETH or USDC to Robinhood Chain. In preview every account starts with
-              $25,000 of paper margin.
-            </>,
-            <>
-              <b>Pick a market.</b> Open <Link to="/options">Options</Link> or <Link to="/perps">Perps</Link> and
-              choose an asset from the bar at the top.
-            </>,
-            <>
-              <b>Place the trade.</b> Review price, margin and breakeven in the order ticket, then confirm. Your
-              position appears in <Link to="/portfolio">Portfolio</Link>.
-            </>,
-          ]}
-        />
-      </>
+      <Steps
+        items={[
+          <>
+            <b>Install a wallet.</b> Robinhood Wallet, MetaMask, Rabby, Coinbase Wallet or any of the 500+ wallets
+            supported through Reown and WalletConnect.
+          </>,
+          <>
+            <b>Connect.</b> Press <span className="kbd">Connect wallet</span> and pick your wallet, or scan the QR code
+            with a mobile wallet. Larry asks your wallet to switch to Robinhood Chain and adds it if it is missing.
+          </>,
+          <>
+            <b>Get ETH and USDG.</b> You need a little ETH for gas and USDG to trade. Bridging USDC to Robinhood Chain
+            gives you USDG.
+          </>,
+          <>
+            <b>Pick a market.</b> Open <Link to="/perps">Perps</Link> or <Link to="/options">Options</Link> and choose
+            an asset from the bar at the top.
+          </>,
+          <>
+            <b>Trade.</b> The first trade asks you to approve USDG, then to confirm the trade. Your positions appear
+            below the chart and in <Link to="/portfolio">Portfolio</Link>.
+          </>,
+        ]}
+      />
     ),
   },
   {
@@ -137,7 +133,7 @@ const PAGES: Page[] = [
       <>
         <p>
           Robinhood Chain is an Ethereum layer 2 built on Arbitrum Orbit. It uses ETH for gas and posts its data to
-          Ethereum. Larry runs on mainnet only.
+          Ethereum.
         </p>
         <table className="doc-table">
           <tbody>
@@ -169,14 +165,6 @@ const PAGES: Page[] = [
             </tr>
           </tbody>
         </table>
-        <p>To add the network by hand, use these values:</p>
-        <pre className="code">{`{
-  "chainId": "${ROBINHOOD_CHAIN.hexId}",
-  "chainName": "${ROBINHOOD_CHAIN.name}",
-  "nativeCurrency": { "name": "Ether", "symbol": "ETH", "decimals": 18 },
-  "rpcUrls": ["${ROBINHOOD_CHAIN.rpcUrl}"],
-  "blockExplorerUrls": ["${ROBINHOOD_CHAIN.explorerUrl}"]
-}`}</pre>
       </>
     ),
   },
@@ -184,16 +172,18 @@ const PAGES: Page[] = [
     slug: 'markets',
     group: 'Trading',
     title: 'Markets',
-    summary: 'Every asset you can trade on Larry.',
+    summary: 'Every asset Larry can list.',
     body: (
       <>
-        <p>Each asset has an options market and a perpetual market. Stocks are tokenized shares on Robinhood Chain.</p>
+        <p>
+          Each asset can have a perpetual market and an options market, priced by its Chainlink feed. Stock markets
+          pause outside exchange hours, when the oracle stops updating.
+        </p>
         <table className="doc-table">
           <thead>
             <tr>
               <th>Asset</th>
               <th>Type</th>
-              <th className="r">Base IV</th>
             </tr>
           </thead>
           <tbody>
@@ -207,55 +197,10 @@ const PAGES: Page[] = [
                   </span>
                 </td>
                 <td>{a.kind === 'stock' ? 'Tokenized stock' : 'Crypto'}</td>
-                <td className="r mono">{pct(a.vol, 0)}</td>
               </tr>
             ))}
           </tbody>
         </table>
-      </>
-    ),
-  },
-  {
-    slug: 'options',
-    group: 'Trading',
-    title: 'Options',
-    summary: 'How Larry options work, from expiry to settlement.',
-    body: (
-      <>
-        <p>
-          Larry lists European options that settle in cash. A call pays out when the price ends above the strike, a
-          put pays out when it ends below.
-        </p>
-        <h2>Expiries</h2>
-        <p>
-          The next four Fridays are always listed, plus the last Friday of the coming months. Options expire at 08:00
-          UTC.
-        </p>
-        <h2>Reading the chain</h2>
-        <ul>
-          <li>Calls are on the left, puts on the right, strikes in the middle.</li>
-          <li>Click an ask to buy, click a bid to sell.</li>
-          <li>Shaded cells are in the money.</li>
-          <li>
-            <b>IV</b> is implied volatility and <b>Δ</b> is delta, how much the option moves for a $1 move in the
-            asset. Put deltas are shown as their size.
-          </li>
-        </ul>
-        <h2>Buying and selling</h2>
-        <p>
-          Buyers pay the premium up front and can never lose more than that. Sellers receive the premium and post 20%
-          of the strike value as margin.
-        </p>
-        <h2>Settlement</h2>
-        <p>At expiry each option is worth its intrinsic value and the cash moves to your margin account.</p>
-        <ul>
-          <li>
-            <b>Call:</b> pays how far the final price is above the strike, times size. Zero if it ends below.
-          </li>
-          <li>
-            <b>Put:</b> pays how far the final price is below the strike, times size. Zero if it ends above.
-          </li>
-        </ul>
       </>
     ),
   },
@@ -263,123 +208,102 @@ const PAGES: Page[] = [
     slug: 'perpetuals',
     group: 'Trading',
     title: 'Perpetuals',
-    summary: 'Leverage, funding and liquidation price.',
+    summary: 'Leverage, fees, liquidation and the profit cap.',
     body: (
       <>
         <p>
-          Perpetual futures track the asset price with no expiry. Choose long or short, a size in dollars and a
-          leverage from 1x to 20x.
+          A perpetual tracks the oracle price with no expiry. You choose long or short, your collateral in USDG and a
+          leverage. Each position has its own isolated margin.
         </p>
-        <h2>Margin</h2>
-        <p>Initial margin is your position size divided by leverage. A $1,000 position at 5x needs $200.</p>
-        <h2>Funding</h2>
+        <h2>Opening</h2>
         <p>
-          Every hour longs and shorts pay each other a funding rate that keeps the perp close to the oracle price. A ▲
-          rate means longs pay shorts, a ▼ rate means shorts pay longs.
+          Position size is collateral times leverage. The open fee is taken from the collateral. Every market has a
+          maximum leverage and an open interest cap per side.
+        </p>
+        <h2>Borrow fee</h2>
+        <p>
+          Instead of funding between traders, positions pay a small borrow fee to the vault, charged per day on size
+          and settled when the position closes.
+        </p>
+        <h2>Profit cap</h2>
+        <p>
+          A position can win at most a fixed multiple of its collateral, shown in each market&apos;s rules. That amount
+          is reserved in the vault when you open, which is why every winner can always be paid.
         </p>
         <h2>Liquidation</h2>
         <p>
-          If losses push your remaining margin below 5% of the position, it is closed at the oracle price. The order
-          ticket shows the estimated liquidation price before you trade.
+          When collateral plus profit, minus fees, falls below the maintenance margin, anyone can liquidate the
+          position and earn the liquidation fee. The rest goes to the vault. The order ticket shows your estimated
+          liquidation price.
         </p>
+        <h2>Slippage</h2>
+        <p>Trades fill at the oracle price. If it moves more than 0.5% before your transaction lands, the trade reverts.</p>
       </>
     ),
   },
   {
-    slug: 'margin',
+    slug: 'options',
     group: 'Trading',
-    title: 'Portfolio margin',
-    summary: 'One account, all positions, margin on real risk.',
+    title: 'Options',
+    summary: 'Buying calls and puts, settlement and claiming.',
     body: (
       <>
         <p>
-          Options, perps and vault deposits all share one margin account. Free margin is what you can use for new
-          trades. Equity is free margin plus the value of every open position.
+          Larry options are European and settle in cash. A call pays when the price ends above the strike, a put pays
+          when it ends below. You buy options from the vault and pay the premium up front, which is the most you can
+          lose.
         </p>
+        <h2>Expiries and strikes</h2>
         <p>
-          When positions offset each other, such as a short call against a long perp, the account is charged for the
-          combined risk rather than each leg on its own.
+          Options expire on Fridays at 08:00 UTC and can be bought until an hour before. Strikes can be anywhere from
+          half to twice the current price.
         </p>
-        <Callout title="Tip">Check Portfolio before adding size. It shows equity, free margin and unrealized PnL live.</Callout>
+        <h2>Pricing</h2>
+        <p>
+          The premium is computed onchain with Black Scholes using the market&apos;s implied volatility, plus a spread
+          kept by the vault. A small protocol fee is added on top. The order ticket shows the exact onchain quote.
+        </p>
+        <h2>Payout cap</h2>
+        <p>Each contract pays at most its strike value, so a call can at most double in the money. Puts are never capped by this.</p>
+        <h2>Settlement and claiming</h2>
+        <ul>
+          <li>After expiry, the settlement price is the first Chainlink price published at or after expiry.</li>
+          <li>Anyone can submit it. The contract checks that it really is the first price after expiry.</li>
+          <li>
+            Press <span className="kbd">Settle and claim</span> on an expired option and the payout goes to your wallet.
+          </li>
+        </ul>
       </>
     ),
   },
   {
-    slug: 'vaults',
+    slug: 'vault',
     group: 'Earn',
-    title: 'Vaults',
-    summary: 'Automated strategies and how deposits earn.',
+    title: 'Vault',
+    summary: 'How the Larry vault earns and how solvency works.',
     body: (
       <>
         <p>
-          A vault pools deposits and runs one strategy every week. You receive shares, and their value grows as the
-          vault earns premium or funding.
+          The Larry vault (LLP) is the counterparty to every trade. Deposit USDG and you receive LLP shares whose value
+          follows the vault.
         </p>
-        <table className="doc-table">
-          <thead>
-            <tr>
-              <th>Vault</th>
-              <th>Strategy</th>
-              <th>Risk</th>
-              <th className="r">Est. APY</th>
-            </tr>
-          </thead>
-          <tbody>
-            {VAULTS.map((v) => (
-              <tr key={v.id}>
-                <td>{v.name}</td>
-                <td>{v.strategy}</td>
-                <td>{v.risk}</td>
-                <td className="r mono">{pct(v.apy, 1)}</td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-        <h2>Strategies</h2>
+        <h2>Where returns come from</h2>
         <ul>
-          <li>
-            <b>Covered call.</b> Holds the asset and sells calls above the price. Earns premium but gives up gains
-            above the strike.
-          </li>
-          <li>
-            <b>Secured put.</b> Holds USDC and sells puts below the price. Earns premium and may end up buying the
-            asset at the strike.
-          </li>
-          <li>
-            <b>Principal protected.</b> Earns lending yield and spends it on call spreads, so the deposit is not put
-            at risk.
-          </li>
-          <li>
-            <b>Basis trade.</b> Long spot and short perp at the same size. Collects funding with no price exposure.
-          </li>
-          <li>
-            <b>Iron condor.</b> Sells both a call spread and a put spread. Earns most when the price stays in range.
-          </li>
+          <li>Perp open and close fees, borrow fees and liquidations</li>
+          <li>Option premiums and the pricing spread</li>
+          <li>Trader losses</li>
         </ul>
-        <Callout kind="warn" title="APY is an estimate">
-          Returns change every week with volatility and funding. A strategy can lose money when the market moves
-          sharply.
-        </Callout>
-      </>
-    ),
-  },
-  {
-    slug: 'pricing',
-    group: 'Protocol',
-    title: 'Pricing and oracles',
-    summary: 'Where prices come from and how options are valued.',
-    body: (
-      <>
+        <p>Trader profits are paid from the vault, so LP returns can be negative.</p>
+        <h2>Solvency</h2>
         <p>
-          Every market uses an index price from an oracle. Perps mark to that price, and options are valued with the
-          Black Scholes model using a volatility smile per expiry.
+          Before a trade opens, the most it can win is reserved in the vault. Reserved liquidity can&apos;t be withdrawn,
+          so the vault can always pay every open position.
         </p>
-        <ul>
-          <li>Strikes far from the price carry higher implied volatility than strikes near it.</li>
-          <li>Puts below the price carry extra volatility, as in real markets.</li>
-          <li>Quotes show a bid and an ask around the model price.</li>
-        </ul>
-        <Callout title="Preview">The preview uses a simulated price feed that moves every 1.5 seconds.</Callout>
+        <h2>Lock and caps</h2>
+        <p>
+          New deposits are locked for a short period before they can be withdrawn, which stops deposits timed around
+          single trades. The vault has a deposit cap while the protocol grows.
+        </p>
       </>
     ),
   },
@@ -389,32 +313,73 @@ const PAGES: Page[] = [
     title: 'Fees',
     summary: 'What it costs to trade on Larry.',
     body: (
+      <>
+        <p>Fees are set per market by the protocol and shown live in each market&apos;s rules and order ticket.</p>
+        <table className="doc-table">
+          <thead>
+            <tr>
+              <th>Action</th>
+              <th>Fee</th>
+              <th>Goes to</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td>Open a perp</td>
+              <td>Open fee on size</td>
+              <td>Vault and treasury</td>
+            </tr>
+            <tr>
+              <td>Close a perp</td>
+              <td>Close fee on size</td>
+              <td>Vault</td>
+            </tr>
+            <tr>
+              <td>Hold a perp</td>
+              <td>Borrow fee per day on size</td>
+              <td>Vault</td>
+            </tr>
+            <tr>
+              <td>Buy an option</td>
+              <td>Spread in the premium, plus protocol fee</td>
+              <td>Vault and treasury</td>
+            </tr>
+            <tr>
+              <td>Vault deposit or withdrawal</td>
+              <td>Free</td>
+              <td></td>
+            </tr>
+          </tbody>
+        </table>
+      </>
+    ),
+  },
+  {
+    slug: 'contracts',
+    group: 'Protocol',
+    title: 'Contracts',
+    summary: 'Addresses of the Larry contracts on Robinhood Chain.',
+    body: ADDRESSES ? (
       <table className="doc-table">
-        <thead>
-          <tr>
-            <th>Action</th>
-            <th className="r">Fee</th>
-          </tr>
-        </thead>
         <tbody>
-          <tr>
-            <td>Perpetual trade</td>
-            <td className="r mono">0.03% of size</td>
-          </tr>
-          <tr>
-            <td>Option trade</td>
-            <td className="r mono">Included in spread</td>
-          </tr>
-          <tr>
-            <td>Vault deposit or withdrawal</td>
-            <td className="r mono">Free</td>
-          </tr>
-          <tr>
-            <td>Network gas</td>
-            <td className="r mono">About $0.01</td>
-          </tr>
+          {[
+            ['LarryPool', ADDRESSES.pool],
+            ['LarryPerps', ADDRESSES.perps],
+            ['LarryOptions', ADDRESSES.options],
+          ].map(([k, v]) => (
+            <tr key={k}>
+              <th>{k}</th>
+              <td>
+                <a className="link mono" href={`${ROBINHOOD_CHAIN.explorerUrl}/address/${v}`} target="_blank" rel="noreferrer">
+                  {v}
+                </a>
+              </td>
+            </tr>
+          ))}
         </tbody>
       </table>
+    ) : (
+      <p>Contract addresses will appear here at launch.</p>
     ),
   },
   {
@@ -429,19 +394,27 @@ const PAGES: Page[] = [
         </Callout>
         <ul>
           <li>
-            <b>Market risk.</b> Prices can move sharply, especially on weekends and around earnings.
+            <b>Smart contract risk.</b> The contracts are not audited yet and may contain bugs.
           </li>
           <li>
-            <b>Liquidation risk.</b> Leveraged perps and sold options can be closed automatically at a loss.
+            <b>Market risk.</b> Prices can move sharply, especially around weekends and earnings.
           </li>
           <li>
-            <b>Smart contract risk.</b> Code can contain bugs even after audits.
+            <b>Liquidation risk.</b> Leveraged perps can be closed at a loss when they fall below maintenance margin.
           </li>
           <li>
-            <b>Oracle risk.</b> A wrong or delayed price can trigger trades at bad levels.
+            <b>Oracle risk.</b> A wrong or delayed Chainlink price affects trades and settlements.
           </li>
           <li>
-            <b>Tokenized stock risk.</b> Tokenized shares depend on the issuer and may differ from the listed share.
+            <b>Vault risk.</b> When traders win, LPs lose.
+          </li>
+          <li>
+            <b>Admin risk.</b> The owner can change market parameters, fees and caps, and pause new trades. The owner
+            cannot take user funds, and closing positions and withdrawing always stay open.
+          </li>
+          <li>
+            <b>Tokenized stock risk.</b> Tokenized shares depend on their issuer and may trade differently from the
+            listed share.
           </li>
         </ul>
       </>
@@ -457,9 +430,10 @@ const PAGES: Page[] = [
         {[
           ['Is Larry part of Robinhood?', 'No. Larry is an independent project built on Robinhood Chain.'],
           ['Do I need to verify my identity?', 'No. You trade straight from your own wallet.'],
-          ['Which wallets work?', 'Any EVM wallet. Larry connects through Reown, so browser extensions and mobile wallets over WalletConnect both work.'],
-          ['Can I trade stocks outside market hours?', 'Yes. Tokenized stock markets on Larry are open 24/7.'],
-          ['Is my money at risk in the preview?', 'No. The preview uses paper balances only.'],
+          ['Which wallets work?', 'Any EVM wallet. Larry connects through Reown, so browser extensions and mobile wallets both work.'],
+          ['Why can’t I trade a stock right now?', 'Stock prices only update while the exchange is open. Outside those hours the oracle is stale and trading pauses.'],
+          ['Can I sell options?', 'Not yet. You buy options from the vault. To earn like an option seller, deposit into the vault.'],
+          ['What happens to an option I don’t claim?', 'Nothing is lost. Claim any time after expiry.'],
         ].map(([q, a]) => (
           <details key={q}>
             <summary>{q}</summary>

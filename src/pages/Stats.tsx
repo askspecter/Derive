@@ -1,84 +1,104 @@
-import { useMemo } from 'react'
-import { ASSETS, VAULTS } from '../config/markets'
+import { ASSETS } from '../config/markets'
+import { ADDRESSES, ADMIN } from '../config/protocol'
 import { ROBINHOOD_CHAIN } from '../config/chains'
-import { compactUsd } from '../lib/format'
+import { AssetIcon } from '../components/AssetIcon'
+import { NotLive } from '../components/Status'
+import { useProtocol } from '../lib/protocol'
+import { compactUsd, num, shortAddr } from '../lib/format'
 
-function Bars({ data, label }: { data: number[]; label: string }) {
-  const max = Math.max(...data)
-  return (
-    <div className="card">
-      <h3>{label}</h3>
-      <div className="bars">
-        {data.map((d, i) => (
-          <div key={i} className="bar-col" title={compactUsd(d)}>
-            <div className="bar-fill" style={{ height: `${(d / max) * 100}%` }} />
-          </div>
-        ))}
-      </div>
-      <div className="bars-axis muted small">
-        <span>30d ago</span>
-        <span>Today</span>
-      </div>
-    </div>
-  )
-}
+const link = (a: string) => `${ROBINHOOD_CHAIN.explorerUrl}/address/${a}`
 
 export function Stats() {
-  const volume = useMemo(() => Array.from({ length: 30 }, (_, i) => 60e6 + 40e6 * Math.sin(i / 3) ** 2 + i * 3e6), [])
-  const oi = useMemo(() => Array.from({ length: 30 }, (_, i) => 120e6 + i * 4.2e6 + 15e6 * Math.cos(i / 4)), [])
-  const vaultTvl = VAULTS.reduce((s, v) => s + v.tvl, 0)
+  const p = useProtocol()
+  if (!p.deployed.pool) return <div className="app-page container"><NotLive /></div>
+  const oiTotal = p.perps.oiLong.reduce((s, v) => s + v, 0n) + p.perps.oiShort.reduce((s, v) => s + v, 0n)
+  const notional = p.options.openNotional.reduce((s, v) => s + v, 0n)
+  const listed = ASSETS.filter((_, i) => p.perps.markets[i]?.enabled || p.options.markets[i]?.enabled).length
+
   return (
     <div className="app-page container">
       <div className="page-head">
         <div>
           <h1>Protocol stats</h1>
-          <p className="muted">Illustrative metrics for the Larry protocol on Robinhood Chain.</p>
+          <p className="muted">Live from the Larry contracts on Robinhood Chain.</p>
         </div>
       </div>
       <div className="stat-grid">
         <div className="card stat">
-          <div className="muted small">24h volume</div>
-          <div className="stat-value">{compactUsd(volume[29])}</div>
-        </div>
-        <div className="card stat">
-          <div className="muted small">Open interest</div>
-          <div className="stat-value">{compactUsd(oi[29])}</div>
-        </div>
-        <div className="card stat">
           <div className="muted small">Vault TVL</div>
-          <div className="stat-value">{compactUsd(vaultTvl)}</div>
+          <div className="stat-value">{compactUsd(p.amount(p.pool.totalAssets))}</div>
         </div>
         <div className="card stat">
-          <div className="muted small">Markets</div>
-          <div className="stat-value">{ASSETS.length * 2}</div>
+          <div className="muted small">Perps open interest</div>
+          <div className="stat-value">{compactUsd(p.amount(oiTotal))}</div>
         </div>
-      </div>
-      <div className="two-col">
-        <Bars data={volume} label="Daily volume" />
-        <Bars data={oi} label="Open interest" />
+        <div className="card stat">
+          <div className="muted small">Options open notional</div>
+          <div className="stat-value">{compactUsd(p.amount(notional))}</div>
+        </div>
+        <div className="card stat">
+          <div className="muted small">Markets listed</div>
+          <div className="stat-value">{listed}</div>
+        </div>
       </div>
       <div className="card">
-        <h3>Network</h3>
+        <h3>Markets</h3>
         <div className="table-wrap">
           <table className="table">
             <thead>
               <tr>
-                <th>Network</th>
-                <th>Chain ID</th>
-                <th className="hide-sm">RPC</th>
-                <th>Explorer</th>
+                <th>Asset</th>
+                <th className="r">Oracle price</th>
+                <th className="r">Long OI</th>
+                <th className="r">Short OI</th>
+                <th className="r">Options notional</th>
+                <th>Status</th>
               </tr>
             </thead>
             <tbody>
-              {[ROBINHOOD_CHAIN].map((c) => (
-                <tr key={c.id}>
-                  <td>{c.name}</td>
-                  <td className="mono">{c.id}</td>
-                  <td className="mono small hide-sm">{c.rpcUrl}</td>
-                  <td>
-                    <a className="link" href={c.explorerUrl} target="_blank" rel="noreferrer">
-                      Open ↗
-                    </a>
+              {ASSETS.map((a, i) => {
+                const px = p.prices[a.symbol]
+                const live = p.perps.markets[i]?.enabled || p.options.markets[i]?.enabled
+                return (
+                  <tr key={a.symbol}>
+                    <td>
+                      <span className="asset-cell">
+                        <AssetIcon symbol={a.symbol} size={22} />
+                        <b>{a.symbol}</b>
+                      </span>
+                    </td>
+                    <td className="r mono">{px ? `$${num(px.price)}` : ''}</td>
+                    <td className="r mono">{compactUsd(p.amount(p.perps.oiLong[i]))}</td>
+                    <td className="r mono">{compactUsd(p.amount(p.perps.oiShort[i]))}</td>
+                    <td className="r mono">{compactUsd(p.amount(p.options.openNotional[i]))}</td>
+                    <td>{live ? (px?.stale ? 'Market closed' : 'Live') : 'Not listed'}</td>
+                  </tr>
+                )
+              })}
+            </tbody>
+          </table>
+        </div>
+      </div>
+      <div className="card">
+        <h3>Contracts</h3>
+        <div className="table-wrap">
+          <table className="table">
+            <tbody>
+              {[
+                ['LarryPool (LLP vault)', ADDRESSES!.pool],
+                ['LarryPerps', ADDRESSES!.perps],
+                ['LarryOptions', ADDRESSES!.options],
+                [`Collateral (${p.token?.symbol ?? 'USDG'})`, p.token?.address ?? ''],
+                ['Admin', ADMIN ?? ''],
+              ].map(([k, v]) => (
+                <tr key={k}>
+                  <td>{k}</td>
+                  <td className="r">
+                    {v && (
+                      <a className="link mono" href={link(v)} target="_blank" rel="noreferrer">
+                        {shortAddr(v)} ↗
+                      </a>
+                    )}
                   </td>
                 </tr>
               ))}

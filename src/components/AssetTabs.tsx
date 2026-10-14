@@ -1,21 +1,25 @@
 import { ASSETS } from '../config/markets'
-import { useMarket } from '../lib/market'
+import { useProtocol } from '../lib/protocol'
 import { AssetIcon } from './AssetIcon'
-import { changePct, cls, num } from '../lib/format'
+import { cls, num } from '../lib/format'
 
-export function AssetTabs({ value, onChange }: { value: string; onChange(s: string): void }) {
-  const { prices, open24h } = useMarket()
+/** Asset switcher. `listed` says which markets are live for the current product. */
+export function AssetTabs({ value, onChange, listed }: { value: string; onChange(s: string): void; listed: boolean[] }) {
+  const { prices } = useProtocol()
   return (
     <div className="asset-tabs">
-      {ASSETS.map((a) => {
-        const ch = prices[a.symbol] / open24h[a.symbol] - 1
+      {ASSETS.map((a, i) => {
+        const p = prices[a.symbol]
         return (
-          <button key={a.symbol} className={cls('asset-tab', value === a.symbol && 'active')} onClick={() => onChange(a.symbol)}>
+          <button key={a.symbol} className={cls('asset-tab', value === a.symbol && 'active', !listed[i] && 'unlisted')} onClick={() => onChange(a.symbol)}>
             <AssetIcon symbol={a.symbol} size={20} />
             <span className="asset-sym">{a.symbol}</span>
             {a.kind === 'stock' && <span className="tag">Stock</span>}
-            <span className="mono small">{num(prices[a.symbol], prices[a.symbol] < 10 ? 4 : 2)}</span>
-            <span className={cls('mono small', ch >= 0 ? 'up' : 'down')}>{changePct(ch)}</span>
+            {listed[i] && p ? (
+              <span className={cls('mono small', p.stale && 'muted')}>{num(p.price, p.price < 10 ? 4 : 2)}</span>
+            ) : (
+              <span className="muted small">Soon</span>
+            )}
           </button>
         )
       })}

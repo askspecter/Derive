@@ -8,18 +8,14 @@ A [Derive](https://www.derive.xyz/)-style onchain derivatives exchange frontend,
 *Frontend DEX derivatif ala Derive.xyz di jaringan Robinhood Chain: options, perpetuals, dan vault yield
 untuk kripto dan saham tertokenisasi.*
 
-## Features
+## What's inside
 
-- **Landing page**: brand hero, markets with live sparklines, products, vaults
-- **Docs**: built in documentation at `#/docs` with search, 12 chapters and previous/next navigation
-- **Options**: options chain (calls/puts, bid/ask, IV smile, delta) priced with Black-Scholes, weekly and
-  monthly expiries, an order ticket with greeks, breakeven and margin
-- **Perps**: candlestick chart, order book, long/short up to 20x, liquidation price estimate
-- **Vaults**: covered call, cash-secured put, principal protected, basis and iron condor strategies
-- **Portfolio**: equity, free margin, unrealized PnL, open positions, vault positions, trade history
-- **Stats**: protocol metrics and Robinhood Chain network details
-- **Wallet**: Reown AppKit modal (browser wallets and WalletConnect QR) locked to Robinhood Chain
-- Markets for crypto (ETH, BTC, SOL) and tokenized stocks (HOOD, TSLA, NVDA, AAPL)
+- **Contracts** (`contracts/`): `LarryPool` (ERC4626 liquidity vault, the counterparty), `LarryPerps`
+  (isolated margin perpetuals) and `LarryOptions` (European cash settled options, Black Scholes onchain).
+  Prices come from Chainlink, collateral is USDG.
+- **App** (`src/`): landing page, Perps, Options, Vault, Portfolio, Stats, Docs and an **Admin** page that
+  deploys and configures everything from the admin wallet.
+- **Tests**: 13 contract tests and a browser end to end test that drives the real UI.
 
 ## Network
 
@@ -37,12 +33,22 @@ Logos are bundled in `public/tokens`. ETH uses the Robinhood feather mark; BTC a
 `cryptocurrency-icons`, and the stock logos (HOOD, TSLA, NVDA, AAPL) are the official marks from
 `simple-icons` on brand-coloured badges. Logos are trademarks of their respective owners.
 
-## Status
+## Launch checklist
 
-This is a frontend. Prices come from a simulated oracle (`src/lib/market.tsx`) and trades are **paper
-positions** stored in `localStorage` per wallet address (`src/lib/account.tsx`). To go live, deploy the
-matching contracts (margin accounts, option/perp settlement, vaults) on Robinhood Chain and an oracle
-feed, then replace those two modules with contract reads/writes.
+1. Create a **fresh wallet** for the admin (it must have sent no transactions) and fund it with a little ETH
+   on Robinhood Chain.
+2. Set `VITE_LARRY_ADMIN` to that address and `VITE_REOWN_PROJECT_ID` (see `.env.example`), then deploy the site.
+3. Open `/#/admin` with the admin wallet and sign:
+   1. Deploy vault (check the USDG address shown, default `0x5fc5…d168` from Paxos' docs)
+   2. Deploy perps
+   3. Deploy options
+   4. Connect both products to the vault
+4. In **Markets**, paste each asset's Chainlink feed address for Robinhood Chain (from data.chain.link) and
+   list perps and/or options. The page shows the feed's name and latest price before you sign.
+5. Seed the vault with liquidity from any wallet on `/#/vaults`.
+6. Optional but recommended: transfer ownership to a multisig (Safe) in **Ownership**.
+
+**The contracts are not audited.** Keep the deposit cap and open interest caps low until they are.
 
 ## Wallet connection (Reown)
 
@@ -59,9 +65,21 @@ On Vercel or Netlify, add `VITE_REOWN_PROJECT_ID` as an environment variable ins
 
 ```bash
 npm install
-npm run dev        # http://localhost:5173
-npm run build      # typecheck + production build into dist/
-npm run preview
+npm run dev                 # app on http://localhost:5173
+npm run build               # typecheck + production build into dist/
+
+npm run contracts:compile   # solc-js, writes src/contracts/*
+npm run chain               # local Hardhat chain with chain id 4663 (keep running)
+npm run contracts:test      # contract tests against it
+```
+
+Browser end to end test (local chain running):
+
+```bash
+node test/e2e/setup.mjs /tmp/e2e.json   # mock USDG and Chainlink feeds
+VITE_LARRY_ADMIN=0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266 VITE_RPC_URL=http://127.0.0.1:8545 npx vite build --outDir /tmp/dist-e2e
+npx serve /tmp/dist-e2e -l 4190 &
+node test/e2e/ui.cjs http://localhost:4190 /tmp/e2e.json /tmp
 ```
 
 The build is a static site (hash routing, relative base), so `dist/` can be hosted on Vercel, Netlify,

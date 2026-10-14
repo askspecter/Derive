@@ -2,6 +2,8 @@ import { createAppKit } from '@reown/appkit/react'
 import { WagmiAdapter } from '@reown/appkit-adapter-wagmi'
 import { robinhood } from '@reown/appkit/networks'
 import type { AppKitNetwork } from '@reown/appkit/networks'
+import { http } from 'wagmi'
+import { RPC_URL } from '../config/protocol'
 
 // Get a project ID at https://dashboard.reown.com and put it in .env as VITE_REOWN_PROJECT_ID.
 export const projectId = import.meta.env.VITE_REOWN_PROJECT_ID as string | undefined
@@ -13,9 +15,14 @@ if (!projectId) {
 // Larry runs on Robinhood Chain mainnet only (chain ID 4663).
 export const networks: [AppKitNetwork, ...AppKitNetwork[]] = [robinhood]
 
+const rpcUrl = RPC_URL ?? robinhood.rpcUrls.default.http[0]
+const customRpcUrls = { [`eip155:${robinhood.id}`]: [{ url: rpcUrl }] }
+
 export const wagmiAdapter = new WagmiAdapter({
   networks,
   projectId: projectId ?? 'missing-project-id',
+  transports: { [robinhood.id]: http(rpcUrl, { batch: true }) },
+  customRpcUrls,
 })
 
 export const appKit = createAppKit({
@@ -24,6 +31,7 @@ export const appKit = createAppKit({
   defaultNetwork: robinhood,
   projectId: projectId ?? 'missing-project-id',
   allowUnsupportedChain: false,
+  customRpcUrls,
   metadata: {
     name: 'Larry',
     description: 'Take the edge back. Derivatives for everyone on Robinhood Chain.',

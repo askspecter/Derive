@@ -10,8 +10,8 @@ import { Portfolio } from './pages/Portfolio'
 import { Stats } from './pages/Stats'
 import { Docs } from './pages/Docs'
 import { WalletProvider } from './lib/wallet'
-import { MarketProvider } from './lib/market'
-import { AccountProvider } from './lib/account'
+import { ProtocolProvider } from './lib/protocol'
+import { Admin } from './pages/Admin'
 
 function ScrollTop() {
   const { pathname } = useLocation()
@@ -22,8 +22,7 @@ function ScrollTop() {
 export default function App() {
   return (
     <WalletProvider>
-      <MarketProvider>
-        <AccountProvider>
+      <ProtocolProvider>
           <HashRouter>
             <ScrollTop />
             <Header />
@@ -35,6 +34,7 @@ export default function App() {
                 <Route path="/vaults" element={<Vaults />} />
                 <Route path="/portfolio" element={<Portfolio />} />
                 <Route path="/stats" element={<Stats />} />
+                <Route path="/admin" element={<Admin />} />
                 <Route path="/docs" element={<Docs />} />
                 <Route path="/docs/:slug" element={<Docs />} />
                 <Route path="*" element={<Navigate to="/" replace />} />
@@ -42,8 +42,7 @@ export default function App() {
             </main>
             <Footer />
           </HashRouter>
-        </AccountProvider>
-      </MarketProvider>
+      </ProtocolProvider>
     </WalletProvider>
   )
 }

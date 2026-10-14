@@ -1,59 +1,91 @@
 import { Link } from 'react-router-dom'
-import { ASSETS, VAULTS } from '../config/markets'
+import { ASSETS } from '../config/markets'
 import { AssetIcon } from '../components/AssetIcon'
 import { Sparkline } from '../components/Sparkline'
-import { useMarket } from '../lib/market'
-import { changePct, cls, compactUsd, num, pct } from '../lib/format'
+import { useFeedHistory } from '../lib/history'
+import { useProtocol } from '../lib/protocol'
+import { compactUsd, num, pct } from '../lib/format'
 
 const PRODUCTS = [
   {
     to: '/options',
     tag: 'Options',
     title: 'Options on every market',
-    body: 'Calls and puts on crypto and tokenized stocks. Weekly and monthly expiries, cash settled, priced live.',
+    body: 'Calls and puts on crypto and tokenized stocks. Weekly Friday expiries, cash settled, priced onchain.',
   },
   {
     to: '/perps',
     tag: 'Perpetuals',
-    title: 'Perps up to 20x',
-    body: 'Go long or short with one margin account. Funding settles every hour against the oracle price.',
+    title: 'Perps with real leverage',
+    body: 'Go long or short with isolated margin. Chainlink prices, onchain liquidations, no order book games.',
   },
   {
     to: '/vaults',
-    tag: 'Vaults',
-    title: 'Yield on autopilot',
-    body: 'Covered calls, secured puts and basis trades that roll every week. Deposit once and collect premium.',
+    tag: 'Vault',
+    title: 'Be the house',
+    body: 'Deposit USDG into the Larry vault and earn the fees, premiums and losses of every trader.',
   },
 ]
 
 const PILLARS = [
-  { n: '01', title: 'Self custody', body: 'Collateral lives in smart contracts you control. Withdraw any time.' },
-  { n: '02', title: 'Portfolio margin', body: 'Hedged books net out, so margin follows real risk instead of notional.' },
-  { n: '03', title: 'Stocks and crypto', body: 'Trade HOOD, TSLA, NVDA and AAPL next to ETH, BTC and SOL, around the clock.' },
-  { n: '04', title: 'Ethereum security', body: 'Robinhood Chain settles to Ethereum with fast blocks and gas that costs cents.' },
+  { n: '01', title: 'Self custody', body: 'Funds live in smart contracts. No account, no broker, no withdrawal queue.' },
+  { n: '02', title: 'Always solvent', body: 'Every position reserves its maximum payout in the vault before it opens.' },
+  { n: '03', title: 'Stocks and crypto', body: 'Trade HOOD, TSLA, NVDA and AAPL next to ETH, BTC and SOL.' },
+  { n: '04', title: 'Chainlink prices', body: 'Robinhood Chain’s official oracle prices every trade and every settlement.' },
 ]
 
+function MarketRow({ idx }: { idx: number }) {
+  const p = useProtocol()
+  const a = ASSETS[idx]
+  const price = p.prices[a.symbol]
+  const listed = !!p.perps.markets[idx]?.enabled || !!p.options.markets[idx]?.enabled
+  const hist = useFeedHistory(price?.feed, price?.roundId, 8, 40)
+  return (
+    <Link to={`/perps?asset=${a.symbol}`} className="market-row">
+      <div className="asset-cell">
+        <AssetIcon symbol={a.symbol} size={36} />
+        <div>
+          <b>{a.symbol}</b>
+          <div className="muted small">{a.name}</div>
+        </div>
+        {a.kind === 'stock' && <span className="tag">Stock</span>}
+      </div>
+      <Sparkline values={hist.map((x) => x.p)} />
+      <div className="r">
+        <div className="mono">{price ? `$${num(price.price)}` : ''}</div>
+        <div className="muted small">{!listed ? 'Coming soon' : price?.stale ? 'Market closed' : 'Live'}</div>
+      </div>
+      <div className="r hide-sm">
+        <div className="mono">{pct(p.options.markets[idx] ? Number(p.options.markets[idx]!.vol) / 1e18 : a.vol, 0)}</div>
+        <div className="muted small">Implied vol</div>
+      </div>
+    </Link>
+  )
+}
+
 export function Home() {
-  const { prices, open24h, candles } = useMarket()
-  const tvl = VAULTS.reduce((s, v) => s + v.tvl, 0) + 61_800_000
+  const p = useProtocol()
+  const oi = p.perps.oiLong.reduce((s, v) => s + v, 0n) + p.perps.oiShort.reduce((s, v) => s + v, 0n)
+  const listed = ASSETS.filter((_, i) => p.perps.markets[i]?.enabled || p.options.markets[i]?.enabled).length
+  const util = p.pool.totalAssets > 0n ? Number((p.pool.totalReserved * 10_000n) / p.pool.totalAssets) / 1e4 : 0
 
   return (
     <>
       <section className="hero">
         <div className="hero-bg" />
         <div className="container hero-inner">
-          <p className="eyebrow">Options · Perps · Vaults</p>
+          <p className="eyebrow">Options · Perps · Vault</p>
           <h1 className="display">
             Take the edge back
             <br />
             <span className="dim">Derivatives for everyone</span>
           </h1>
           <p className="lead">
-            Trade options and perpetuals on crypto and tokenized stocks, or let a vault do it for you. Onchain, self
+            Trade options and perpetuals on crypto and tokenized stocks, or be the house in the Larry vault. Onchain, self
             custodial, built on Robinhood Chain.
           </p>
           <div className="hero-cta">
-            <Link to="/options" className="btn btn-accent btn-lg">
+            <Link to="/perps" className="btn btn-accent btn-lg">
               Start trading
             </Link>
             <Link to="/docs" className="btn btn-ghost btn-lg">
@@ -63,20 +95,20 @@ export function Home() {
         </div>
         <div className="container hero-stats">
           <div>
-            <span className="eyebrow">Total value locked</span>
-            <b>{compactUsd(tvl)}</b>
+            <span className="eyebrow">Vault TVL</span>
+            <b>{p.live ? compactUsd(p.amount(p.pool.totalAssets)) : 'Soon'}</b>
           </div>
           <div>
-            <span className="eyebrow">Volume</span>
-            <b>{compactUsd(4_820_000_000)}</b>
+            <span className="eyebrow">Open interest</span>
+            <b>{p.live ? compactUsd(p.amount(oi)) : 'Soon'}</b>
           </div>
           <div>
-            <span className="eyebrow">Markets</span>
-            <b>{ASSETS.length * 2}</b>
+            <span className="eyebrow">Markets live</span>
+            <b>{p.live ? listed : 'Soon'}</b>
           </div>
           <div>
-            <span className="eyebrow">Gas per trade</span>
-            <b>$0.01</b>
+            <span className="eyebrow">Network</span>
+            <b>Robinhood</b>
           </div>
         </div>
       </section>
@@ -85,37 +117,16 @@ export function Home() {
         <div className="section-head">
           <div>
             <p className="eyebrow">01 Markets</p>
-            <h2>Every market, one account</h2>
+            <h2>Every market, one wallet</h2>
           </div>
-          <Link to="/options" className="link">
+          <Link to="/perps" className="link">
             Open app →
           </Link>
         </div>
         <div className="market-list">
-          {ASSETS.map((a) => {
-            const ch = prices[a.symbol] / open24h[a.symbol] - 1
-            return (
-              <Link to={`/options?asset=${a.symbol}`} className="market-row" key={a.symbol}>
-                <div className="asset-cell">
-                  <AssetIcon symbol={a.symbol} size={36} />
-                  <div>
-                    <b>{a.symbol}</b>
-                    <div className="muted small">{a.name}</div>
-                  </div>
-                  {a.kind === 'stock' && <span className="tag">Stock</span>}
-                </div>
-                <Sparkline candles={candles[a.symbol]} />
-                <div className="r">
-                  <div className="mono">${num(prices[a.symbol])}</div>
-                  <div className={cls('mono small', ch >= 0 ? 'up' : 'down')}>{changePct(ch)}</div>
-                </div>
-                <div className="r hide-sm">
-                  <div className="mono">{pct(a.vol, 1)}</div>
-                  <div className="muted small">ATM IV</div>
-                </div>
-              </Link>
-            )
-          })}
+          {ASSETS.map((a, i) => (
+            <MarketRow key={a.symbol} idx={i} />
+          ))}
         </div>
       </section>
 
@@ -123,15 +134,15 @@ export function Home() {
         <div className="section-head">
           <div>
             <p className="eyebrow">02 Products</p>
-            <h2>Three ways to trade</h2>
+            <h2>Three ways to play</h2>
           </div>
         </div>
         <div className="product-grid">
-          {PRODUCTS.map((p) => (
-            <Link to={p.to} className="product" key={p.to}>
-              <span className="eyebrow accent">{p.tag}</span>
-              <h3>{p.title}</h3>
-              <p className="muted">{p.body}</p>
+          {PRODUCTS.map((x) => (
+            <Link to={x.to} className="product" key={x.to}>
+              <span className="eyebrow accent">{x.tag}</span>
+              <h3>{x.title}</h3>
+              <p className="muted">{x.body}</p>
               <span className="product-go">→</span>
             </Link>
           ))}
@@ -146,11 +157,11 @@ export function Home() {
           </div>
         </div>
         <div className="pillars">
-          {PILLARS.map((p) => (
-            <div className="pillar" key={p.n}>
-              <span className="mono accent">{p.n}</span>
-              <h3>{p.title}</h3>
-              <p className="muted">{p.body}</p>
+          {PILLARS.map((x) => (
+            <div className="pillar" key={x.n}>
+              <span className="mono accent">{x.n}</span>
+              <h3>{x.title}</h3>
+              <p className="muted">{x.body}</p>
             </div>
           ))}
         </div>
@@ -159,28 +170,26 @@ export function Home() {
       <section className="section container">
         <div className="section-head">
           <div>
-            <p className="eyebrow">04 Vaults</p>
-            <h2>Top yields this week</h2>
+            <p className="eyebrow">04 Vault</p>
+            <h2>Be the house</h2>
           </div>
           <Link to="/vaults" className="link">
-            All vaults →
+            Open vault →
           </Link>
         </div>
         <div className="vault-grid">
-          {[...VAULTS]
-            .sort((a, b) => b.apy - a.apy)
-            .slice(0, 3)
-            .map((v) => (
-              <Link to="/vaults" className="card vault-card" key={v.id}>
-                <div className="vault-top">
-                  <AssetIcon symbol={v.asset} size={32} />
-                  <span className="eyebrow">{v.strategy}</span>
-                </div>
-                <h3>{v.name}</h3>
-                <div className="vault-apy">{pct(v.apy, 1)}</div>
-                <div className="muted small">Est. APY · TVL {compactUsd(v.tvl)}</div>
-              </Link>
-            ))}
+          <div className="card vault-card">
+            <span className="eyebrow">Total value locked</span>
+            <div className="vault-apy">{p.live ? compactUsd(p.amount(p.pool.totalAssets)) : 'Soon'}</div>
+          </div>
+          <div className="card vault-card">
+            <span className="eyebrow">Utilization</span>
+            <div className="vault-apy">{p.live ? pct(util, 1) : 'Soon'}</div>
+          </div>
+          <div className="card vault-card">
+            <span className="eyebrow">Deposit cap</span>
+            <div className="vault-apy">{p.live ? compactUsd(p.amount(p.pool.depositCap)) : 'Soon'}</div>
+          </div>
         </div>
       </section>
 
@@ -192,7 +201,7 @@ export function Home() {
             <br />
             <span className="dim">Derivatives for everyone</span>
           </h2>
-          <Link to="/options" className="btn btn-accent btn-lg">
+          <Link to="/perps" className="btn btn-accent btn-lg">
             Launch app
           </Link>
         </div>
