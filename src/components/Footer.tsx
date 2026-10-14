@@ -2,6 +2,16 @@ import { Link } from 'react-router-dom'
 import { ROBINHOOD_CHAIN } from '../config/chains'
 import { Logo } from './Logo'
 
+export const X_URL = 'https://x.com/larryexchange_'
+
+function XIcon() {
+  return (
+    <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor" aria-hidden>
+      <path d="M18.244 2.25h3.308l-7.227 8.26 8.502 11.24H16.17l-5.214-6.817L4.99 21.75H1.68l7.73-8.835L1.254 2.25H8.08l4.713 6.231zm-1.161 17.52h1.833L7.084 4.126H5.117z" />
+    </svg>
+  )
+}
+
 export function Footer() {
   return (
     <footer className="footer">
@@ -16,6 +26,9 @@ export function Footer() {
             <br />
             Derivatives for everyone
           </p>
+          <a href={X_URL} target="_blank" rel="noreferrer" className="btn btn-ghost btn-sm footer-x" aria-label="Larry on X">
+            <XIcon /> Follow on X
+          </a>
         </div>
         <div>
           <h4>Trade</h4>
@@ -30,6 +43,12 @@ export function Footer() {
           <Link to="/docs/fees">Fees</Link>
           <Link to="/docs/risks">Risks</Link>
           <Link to="/stats">Stats</Link>
+        </div>
+        <div>
+          <h4>Community</h4>
+          <a href={X_URL} target="_blank" rel="noreferrer" className="social">
+            <XIcon /> @larryexchange_
+          </a>
         </div>
         <div>
           <h4>Network</h4>

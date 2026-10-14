@@ -69,6 +69,32 @@ export function Home() {
   const listed = ASSETS.filter((_, i) => p.perps.markets[i]?.enabled || p.options.markets[i]?.enabled).length
   const util = p.pool.totalAssets > 0n ? Number((p.pool.totalReserved * 10_000n) / p.pool.totalAssets) / 1e4 : 0
 
+  // Real numbers only. While the vault is still small, show the facts that are already true
+  // (markets, leverage, fees) instead of zeros; TVL and open interest take over once they matter.
+  const tvl = p.amount(p.pool.totalAssets)
+  const established = p.live && tvl >= 1000
+  const perpMarkets = p.perps.markets.filter((m) => m?.enabled)
+  const maxLev = perpMarkets.reduce((mx, m) => Math.max(mx, m!.maxLeverage), 0)
+  const minFee = perpMarkets.reduce((mn, m) => Math.min(mn, m!.openFeeBps), Infinity)
+  const lpShare = 100 - p.perps.protocolShareBps / 100
+  const stats: [string, string][] = !p.live
+    ? [['Markets', 'Soon'], ['Products', '3'], ['Custody', 'Yours'], ['Network', 'Robinhood']]
+    : established
+      ? [['Vault TVL', compactUsd(tvl)], ['Open interest', compactUsd(p.amount(oi))], ['Markets live', String(listed)], ['Network', 'Robinhood']]
+      : [
+          ['Markets live', String(listed)],
+          ['Max leverage', maxLev ? `${maxLev}x` : 'Soon'],
+          ['Trading fee', Number.isFinite(minFee) ? `${(minFee / 100).toFixed(2)}%` : 'Soon'],
+          ['Network', 'Robinhood'],
+        ]
+  const vaultCards: [string, string][] = established
+    ? [['Total value locked', compactUsd(tvl)], ['Utilization', pct(util, 1)], ['Deposit cap', compactUsd(p.amount(p.pool.depositCap))]]
+    : [
+        ['Fees to LPs', p.live ? `${lpShare}%` : 'Soon'],
+        ['Deposit lock', p.live ? `${Math.round(p.pool.lockPeriod / 3600)}h` : 'Soon'],
+        ['Deposit cap', p.live ? compactUsd(p.amount(p.pool.depositCap)) : 'Soon'],
+      ]
+
   return (
     <>
       <section className="hero">
@@ -94,22 +120,12 @@ export function Home() {
           </div>
         </div>
         <div className="container hero-stats">
-          <div>
-            <span className="eyebrow">Vault TVL</span>
-            <b>{p.live ? compactUsd(p.amount(p.pool.totalAssets)) : 'Soon'}</b>
-          </div>
-          <div>
-            <span className="eyebrow">Open interest</span>
-            <b>{p.live ? compactUsd(p.amount(oi)) : 'Soon'}</b>
-          </div>
-          <div>
-            <span className="eyebrow">Markets live</span>
-            <b>{p.live ? listed : 'Soon'}</b>
-          </div>
-          <div>
-            <span className="eyebrow">Network</span>
-            <b>Robinhood</b>
-          </div>
+          {stats.map(([k, v]) => (
+            <div key={k}>
+              <span className="eyebrow">{k}</span>
+              <b>{v}</b>
+            </div>
+          ))}
         </div>
       </section>
 
@@ -178,18 +194,12 @@ export function Home() {
           </Link>
         </div>
         <div className="vault-grid">
-          <div className="card vault-card">
-            <span className="eyebrow">Total value locked</span>
-            <div className="vault-apy">{p.live ? compactUsd(p.amount(p.pool.totalAssets)) : 'Soon'}</div>
-          </div>
-          <div className="card vault-card">
-            <span className="eyebrow">Utilization</span>
-            <div className="vault-apy">{p.live ? pct(util, 1) : 'Soon'}</div>
-          </div>
-          <div className="card vault-card">
-            <span className="eyebrow">Deposit cap</span>
-            <div className="vault-apy">{p.live ? compactUsd(p.amount(p.pool.depositCap)) : 'Soon'}</div>
-          </div>
+          {vaultCards.map(([k, v]) => (
+            <div className="card vault-card" key={k}>
+              <span className="eyebrow">{k}</span>
+              <div className="vault-apy">{v}</div>
+            </div>
+          ))}
         </div>
       </section>
 
