@@ -44,6 +44,7 @@ export function Footer() {
           <Link to="/docs">Docs</Link>
           <Link to="/docs/fees">Fees</Link>
           <Link to="/docs/risks">Risks</Link>
+          <Link to="/docs/agents">Agent Kit</Link>
           <Link to="/stats">Stats</Link>
         </div>
         <div>

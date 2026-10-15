@@ -6,3 +6,6 @@ dist
 .env
 test/.hh-cache
 test/.hh-artifacts
+
+agent-kit/node_modules
+agent-kit/test/.env.json

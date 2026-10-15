@@ -38,6 +38,99 @@ function Steps({ items }: { items: ReactNode[] }) {
   )
 }
 
+/** Ready to paste MCP config, filled in with this deployment's contract addresses. */
+function AgentKitDoc() {
+  const [copied, setCopied] = useState('')
+  const perps = ADDRESSES?.perps ?? '<LarryPerps address>'
+  const options = ADDRESSES?.options ?? '<LarryOptions address>'
+  const legacy = OPTIONS_LEGACY.length ? `,\n        "LARRY_OPTIONS_LEGACY": "${OPTIONS_LEGACY.join(',')}"` : ''
+  const desktop = `{
+  "mcpServers": {
+    "larry": {
+      "command": "node",
+      "args": ["/absolute/path/to/larry-mcp.mjs"],
+      "env": {
+        "LARRY_OPTIONS": "${options}",
+        "LARRY_PERPS": "${perps}"${legacy},
+        "LARRY_PRIVATE_KEY": "<agent wallet key, leave out for read only>",
+        "LARRY_MAX_PER_TRADE": "50",
+        "LARRY_MAX_PER_DAY": "200"
+      }
+    }
+  }
+}`
+  const code = `claude mcp add --transport stdio larry --env LARRY_OPTIONS=${options} --env LARRY_PERPS=${perps} -- node /absolute/path/to/larry-mcp.mjs`
+  const copy = async (k: string, v: string) => {
+    try {
+      await navigator.clipboard.writeText(v)
+      setCopied(k)
+      setTimeout(() => setCopied(''), 1500)
+    } catch {}
+  }
+  return (
+    <>
+      <p>
+        The Larry Agent Kit is an MCP server that lets AI agents read markets and trade on Larry: Claude Desktop, Claude Code,
+        or any agent that speaks the Model Context Protocol. It is one file, runs on your own machine with Node 20 or newer,
+        and talks straight to the Larry contracts on Robinhood Chain.
+      </p>
+      <Steps
+        items={[
+          <>
+            Download <a className="link mono" href="/agent/larry-mcp.mjs" download>larry-mcp.mjs</a>.
+          </>,
+          <>Add it to your MCP client with the config below, using the absolute path of the file.</>,
+          <>Ask your agent something like <span className="kbd">what does a 0DTE ETH call at 3500 cost?</span></>,
+        ]}
+      />
+      <h2>Claude Desktop</h2>
+      <p>Paste into claude_desktop_config.json, then restart Claude Desktop.</p>
+      <pre className="code">{desktop}</pre>
+      <button className="btn btn-ghost btn-sm" onClick={() => copy('desktop', desktop)}>
+        {copied === 'desktop' ? 'Copied' : 'Copy config'}
+      </button>
+      <h2>Claude Code</h2>
+      <pre className="code">{code}</pre>
+      <button className="btn btn-ghost btn-sm" onClick={() => copy('code', code)}>
+        {copied === 'code' ? 'Copied' : 'Copy command'}
+      </button>
+      <h2>What agents can do</h2>
+      <table className="doc-table">
+        <tbody>
+          {[
+            ['Read', 'Markets and Chainlink prices, expiries, option chains, exact quotes, balances, positions, vault stats'],
+            ['Options', 'Buy calls and puts, including 0DTE, then settle and claim the payout'],
+            ['Perps', 'Open and close leveraged longs and shorts'],
+            ['Vault', 'Deposit into and withdraw from the Larry Vault'],
+          ].map(([k, v]) => (
+            <tr key={k}>
+              <th>{k}</th>
+              <td>{v}</td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+      <h2>Safety</h2>
+      <ul>
+        <li>Without a private key the server is read only. Agents can look, but not trade.</li>
+        <li>
+          To trade, give the agent <b>a fresh wallet holding only what it may spend</b>. The key stays on your machine.
+        </li>
+        <li>
+          <span className="kbd">LARRY_MAX_PER_TRADE</span> and <span className="kbd">LARRY_MAX_PER_DAY</span> cap what the
+          agent spends in USDG. <span className="kbd">LARRY_ALLOW</span> limits it to options, perps or the vault.
+        </li>
+        <li>
+          <span className="kbd">LARRY_DRY_RUN=1</span> simulates every trade against the chain and sends nothing.
+        </li>
+      </ul>
+      <Callout kind="warn" title="Agents can lose money">
+        An agent trades with real funds and can be wrong. Start in dry run, keep the limits small, and review what it does.
+      </Callout>
+    </>
+  )
+}
+
 const PAGES: Page[] = [
   {
     slug: 'introduction',
@@ -400,6 +493,13 @@ const PAGES: Page[] = [
     ) : (
       <p>Contract addresses will appear here at launch.</p>
     ),
+  },
+  {
+    slug: 'agents',
+    group: 'Build',
+    title: 'Agent Kit',
+    summary: 'Let AI agents trade on Larry over MCP.',
+    body: <AgentKitDoc />,
   },
   {
     slug: 'token',
