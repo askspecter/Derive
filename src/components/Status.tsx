@@ -15,6 +15,27 @@ export function NotLive() {
   const p = useProtocol()
   const { address } = useWallet()
   const isAdmin = !!address && !!p.admin && address.toLowerCase() === p.admin.toLowerCase()
+  // Slow connections take a few seconds to read the contracts; don't call that "not live".
+  if (p.configured && p.checking)
+    return (
+      <div className="card not-live">
+        <p className="eyebrow accent">Connecting</p>
+        <h2>Loading Larry</h2>
+        <p className="muted">Reading the contracts on Robinhood Chain.</p>
+        <div className="loading-bar" />
+      </div>
+    )
+  if (p.configured && p.error)
+    return (
+      <div className="card not-live">
+        <p className="eyebrow accent">Network</p>
+        <h2>Can&apos;t reach Robinhood Chain</h2>
+        <p className="muted">The network didn&apos;t answer. Check your connection and try again.</p>
+        <button className="btn btn-accent" onClick={() => p.refetch()}>
+          Try again
+        </button>
+      </div>
+    )
   return (
     <div className="card not-live">
       <p className="eyebrow accent">Launching soon</p>
@@ -22,7 +43,9 @@ export function NotLive() {
       <p className="muted">
         {!p.configured
           ? 'The admin wallet has not been configured for this site.'
-          : 'The protocol contracts have not been deployed to Robinhood Chain yet.'}
+          : p.deployed.pool
+            ? 'The contracts are deployed but setup is not finished yet.'
+            : 'The protocol contracts have not been deployed to Robinhood Chain yet.'}
       </p>
       {isAdmin || !p.configured ? (
         <Link to="/admin" className="btn btn-accent">

@@ -46,6 +46,10 @@ export interface Price {
 export interface ProtocolState {
   configured: boolean
   loading: boolean
+  /** The first read of the contracts has not come back yet. */
+  checking: boolean
+  /** Reading the chain failed (RPC down or unreachable). */
+  error: boolean
   deployed: { pool: boolean; perps: boolean; options: boolean }
   live: boolean
   admin: Address | null
@@ -235,6 +239,8 @@ export function ProtocolProvider({ children }: { children: ReactNode }) {
   const value: ProtocolState = {
     configured: !!A,
     loading: poolCode.isLoading || core.isLoading,
+    checking: !!A && (poolCode.data === undefined || ((!!poolCode.data && poolCode.data !== '0x') && core.data === undefined)) && !poolCode.isError && !core.isError,
+    error: poolCode.isError || core.isError,
     deployed,
     live: deployed.pool && deployed.perps && deployed.options && !!r(d[10]) && !!r(d[11]),
     admin: ADMIN,
