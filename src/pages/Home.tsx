@@ -1,17 +1,18 @@
 import { SmartLink as Link } from '../components/SmartLink'
 import { ASSETS } from '../config/markets'
 import { AssetIcon } from '../components/AssetIcon'
+import { TokenCA } from '../components/TokenCA'
 import { Sparkline } from '../components/Sparkline'
 import { useFeedHistory } from '../lib/history'
 import { useProtocol } from '../lib/protocol'
-import { compactUsd, num, pct } from '../lib/format'
+import { cls, compactUsd, num, pct } from '../lib/format'
 
 const PRODUCTS = [
   {
     to: '/options',
     tag: 'Options',
     title: 'Options on every market',
-    body: 'Calls and puts on crypto and tokenized stocks. Weekly Friday expiries, cash settled, priced onchain.',
+    body: 'Calls and puts on crypto and tokenized stocks. Daily 0DTE and Friday expiries, cash settled, priced onchain.',
   },
   {
     to: '/perps',
@@ -63,10 +64,68 @@ function MarketRow({ idx }: { idx: number }) {
   )
 }
 
+/** A 24 hour dial with today's run towards the next 08:00 UTC expiry. */
+function DayDial() {
+  const nowH = (Date.now() / 3600000) % 24
+  const R = 120
+  const pt = (h: number, r: number) => {
+    const a = (h / 24) * 2 * Math.PI - Math.PI / 2
+    return [160 + r * Math.cos(a), 160 + r * Math.sin(a)]
+  }
+  // From the last 08:00 to now, clockwise.
+  const from = 8
+  const to = nowH >= 8 ? nowH : nowH + 24
+  const [x0, y0] = pt(from, R + 14)
+  const [x1, y1] = pt(to, R + 14)
+  const large = to - from > 12 ? 1 : 0
+  return (
+    <svg className="day-dial" viewBox="0 0 320 320" aria-hidden>
+      <circle cx="160" cy="160" r={R + 14} fill="none" stroke="var(--border)" strokeWidth="2" />
+      {Array.from({ length: 96 }, (_, i) => {
+        const big = i % 4 === 0
+        const [ax, ay] = pt(i / 4, R)
+        const [bx, by] = pt(i / 4, R - (big ? 12 : 6))
+        return <line key={i} x1={ax} y1={ay} x2={bx} y2={by} stroke="currentColor" strokeOpacity={big ? 0.5 : 0.18} strokeWidth={big ? 1.6 : 1} />
+      })}
+      {[0, 6, 12, 18].map((h) => {
+        const [x, y] = pt(h, R - 30)
+        return (
+          <text key={h} x={x} y={y + 4} textAnchor="middle" className="mono" fontSize="12" fill="currentColor" opacity=".45">
+            {String(h).padStart(2, '0')}
+          </text>
+        )
+      })}
+      <path d={`M${x0},${y0} A${R + 14},${R + 14} 0 ${large} 1 ${x1},${y1}`} fill="none" stroke="var(--accent)" strokeWidth="4" strokeLinecap="round" className="day-arc" />
+      <circle cx={x1} cy={y1} r="6" fill="#fff" className="day-head" />
+      {(() => {
+        const [x, y] = pt(8, R + 30)
+        const [lx, ly] = pt(8, R - 30)
+        return (
+          <>
+            <circle cx={x} cy={y} r="5" fill="var(--accent)" />
+            <text x={lx} y={ly + 4} textAnchor="middle" className="mono" fontSize="13" fill="var(--accent)">
+              08
+            </text>
+          </>
+        )
+      })()}
+      <text x="160" y="156" textAnchor="middle" className="mono" fontSize="12" fill="currentColor" opacity=".5">
+        NEXT EXPIRY
+      </text>
+      <text x="160" y="180" textAnchor="middle" className="mono" fontSize="20" fill="currentColor">
+        08:00 UTC
+      </text>
+    </svg>
+  )
+}
+
 export function Home() {
   const p = useProtocol()
   const oi = p.perps.oiLong.reduce((s, v) => s + v, 0n) + p.perps.oiShort.reduce((s, v) => s + v, 0n)
   const listed = ASSETS.filter((_, i) => p.perps.markets[i]?.enabled || p.options.markets[i]?.enabled).length
+  const zeroDteIdx = ASSETS.map((_, i) => i).filter((i) => p.options.daily[i] && p.options.markets[i]?.enabled)
+  const zeroDteLive = p.live && zeroDteIdx.length > 0
+  const zeroDteMarkets = zeroDteIdx.map((i) => ASSETS[i].symbol).join(', ').replace(/, ([^,]*)$/, ' and $1')
   const util = p.pool.totalAssets > 0n ? Number((p.pool.totalReserved * 10_000n) / p.pool.totalAssets) / 1e4 : 0
 
   // Real numbers only. While the vault is still small, show the facts that are already true
@@ -167,6 +226,32 @@ export function Home() {
       </section>
 
       <section className="section container">
+        <div className="zdte-band">
+          <div className="zdte-copy">
+            <p className="eyebrow">
+              <span className={cls('tag', zeroDteLive ? 'zdte' : 'off')}>{zeroDteLive ? 'Live' : 'Coming soon'}</span> New on Larry
+            </p>
+            <h2 className="display small-display">
+              0<span className="accent">DTE</span>
+            </h2>
+            <p className="lead">
+              Options that live for one day. Buy a call or a put on {zeroDteMarkets || 'ETH, BTC and LINK'} and it settles at the next 08:00 UTC,
+              priced onchain and settled by Chainlink.
+            </p>
+            <ul className="zdte-points">
+              <li>Daily expiries next to the Friday ones</li>
+              <li>Black Scholes pricing with an extra spread under one day</li>
+              <li>Every payout reserved in the vault before you buy</li>
+            </ul>
+            <Link to="/options" className="btn btn-accent btn-lg">
+              {zeroDteLive ? 'Trade 0DTE' : 'Explore options'}
+            </Link>
+          </div>
+          <DayDial />
+        </div>
+      </section>
+
+      <section className="section container">
         <div className="section-head">
           <div>
             <p className="eyebrow">03 Why Larry</p>
@@ -201,6 +286,22 @@ export function Home() {
               <div className="vault-apy">{v}</div>
             </div>
           ))}
+        </div>
+      </section>
+
+      <section className="section container">
+        <div className="section-head">
+          <div>
+            <p className="eyebrow">05 Token</p>
+            <h2>$LARRY</h2>
+          </div>
+        </div>
+        <div className="card token-card">
+          <div>
+            <p className="eyebrow accent">Official contract address</p>
+            <p className="muted">The only official $LARRY token on Robinhood Chain. Always check the address before you buy.</p>
+          </div>
+          <TokenCA />
         </div>
       </section>
 

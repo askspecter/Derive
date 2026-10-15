@@ -33,6 +33,15 @@ export const ADDRESSES: Addresses | null = ADMIN
     }
   : null
 
+/**
+ * Earlier options contracts that still hold open or unclaimed options, after options moved to a
+ * new contract. Comma separated in VITE_LARRY_OPTIONS_LEGACY. Their positions stay claimable here.
+ */
+export const OPTIONS_LEGACY: Address[] = ((env.VITE_LARRY_OPTIONS_LEGACY as string | undefined) ?? '')
+  .split(',')
+  .map((a) => override(a.trim()))
+  .filter((a): a is Address => !!a && a !== ADDRESSES?.options)
+
 /** Nonce the admin wallet must have when it sends each deployment. */
 export const DEPLOY_NONCE = { pool: 0, perps: 1, options: 2 } as const
 

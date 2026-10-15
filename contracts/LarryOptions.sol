@@ -14,7 +14,8 @@ import {BlackScholesLib} from "./libraries/BlackScholesLib.sol";
 /// @title LarryOptions
 /// @notice European, cash settled options sold by LarryPool and priced onchain with Black Scholes.
 ///
-/// Expiries are Fridays at 08:00 UTC. Payouts are capped at the strike value per contract
+/// Expiries are Fridays at 08:00 UTC. Markets the owner opts in also list daily expiries at
+/// 08:00 UTC, so an option can live for less than a day (0DTE). Payouts are capped at the strike value per contract
 /// (a call can at most double in the money), and that cap is reserved in the pool at purchase,
 /// so every option can always be paid.
 ///
@@ -27,6 +28,8 @@ contract LarryOptions is Ownable2Step, ReentrancyGuard {
     uint256 internal constant WAD = 1e18;
     /// @dev 1970-01-02 was a Friday; 08:00 UTC on it is 115200 seconds after the epoch.
     uint256 internal constant FRIDAY_0800 = 115_200;
+    /// @dev 08:00 UTC as seconds into a day.
+    uint256 internal constant DAY_0800 = 28_800;
 
     struct Market {
         address feed; // Chainlink price feed proxy
@@ -66,6 +69,11 @@ contract LarryOptions is Ownable2Step, ReentrancyGuard {
 
     /// @notice Fee on top of the premium, sent to the treasury.
     uint256 public protocolFeeBps = 30;
+    /// @notice Markets that list daily expiries as well as the Friday ones.
+    mapping(uint256 => bool) public dailyExpiries;
+    /// @notice Extra markup on options with less than a day to expiry, where oracle lag and gamma
+    /// risk are largest for the pool. Added on top of the market spread.
+    uint256 public shortDatedSpreadBps = 300;
     /// @notice After this delay past expiry the owner may settle by hand if no oracle round exists.
     uint256 public constant MANUAL_SETTLE_DELAY = 3 days;
     bool public paused;
@@ -73,6 +81,8 @@ contract LarryOptions is Ownable2Step, ReentrancyGuard {
     event MarketSet(uint256 indexed marketId, Market market);
     event PausedSet(bool paused);
     event ProtocolFeeSet(uint256 bps);
+    event DailyExpiriesSet(uint256 indexed marketId, bool enabled);
+    event ShortDatedSpreadSet(uint256 bps);
     event OptionBought(
         uint256 indexed id,
         address indexed owner,
@@ -111,8 +121,15 @@ contract LarryOptions is Ownable2Step, ReentrancyGuard {
 
     // ---------------------------------------------------------------- views
 
+    /// @notice True for a Friday 08:00 UTC expiry that can still be bought.
     function isValidExpiry(uint256 expiry) public view returns (bool) {
         return expiry > block.timestamp + 1 hours && expiry % 1 weeks == FRIDAY_0800;
+    }
+
+    /// @notice True for any expiry the market lists: Fridays, plus every day at 08:00 UTC if enabled.
+    function isValidExpiryFor(uint256 marketId, uint256 expiry) public view returns (bool) {
+        if (isValidExpiry(expiry)) return true;
+        return dailyExpiries[marketId] && expiry > block.timestamp + 1 hours && expiry % 1 days == DAY_0800;
     }
 
     function getOption(uint256 id) external view returns (Option memory) {
@@ -140,13 +157,15 @@ contract LarryOptions is Ownable2Step, ReentrancyGuard {
     {
         Market storage m = markets[marketId];
         if (!m.enabled) revert MarketDisabled();
-        if (!isValidExpiry(expiry) || expiry > block.timestamp + m.maxExpiry) revert BadExpiry();
+        if (!isValidExpiryFor(marketId, expiry) || expiry > block.timestamp + m.maxExpiry) revert BadExpiry();
         if (amount == 0) revert BadAmount();
         uint256 s = spot(marketId);
         if (strike < s / 2 || strike > s * 2) revert BadStrike();
 
-        uint256 unitPrice = BlackScholesLib.price(isCall, s, strike, expiry - block.timestamp, m.vol);
-        unitPrice = (unitPrice * (BPS + m.spreadBps)) / BPS;
+        uint256 tte = expiry - block.timestamp;
+        uint256 unitPrice = BlackScholesLib.price(isCall, s, strike, tte, m.vol);
+        uint256 spread = m.spreadBps + (tte < 1 days ? shortDatedSpreadBps : 0);
+        unitPrice = (unitPrice * (BPS + spread)) / BPS;
         uint256 floor = (s * m.minPremiumBps) / BPS;
         if (unitPrice < floor) unitPrice = floor;
         // A call's payout is capped at the strike, so it is never worth more than the strike.
@@ -255,6 +274,33 @@ contract LarryOptions is Ownable2Step, ReentrancyGuard {
     // --------------------------------------------------------------- admin
 
     function setMarket(uint256 marketId, Market calldata m) external onlyOwner {
+        _setMarket(marketId, m);
+    }
+
+    /// @notice Lists several markets in one transaction, for example when moving to a new contract.
+    function setMarkets(uint256[] calldata marketIds, Market[] calldata ms) external onlyOwner {
+        if (marketIds.length != ms.length) revert BadParams();
+        for (uint256 i; i < marketIds.length; ++i) {
+            _setMarket(marketIds[i], ms[i]);
+        }
+    }
+
+    /// @notice Turns daily (0DTE) expiries on or off for listed markets.
+    function setDailyExpiries(uint256[] calldata marketIds, bool enabled) external onlyOwner {
+        for (uint256 i; i < marketIds.length; ++i) {
+            if (markets[marketIds[i]].feed == address(0)) revert BadParams();
+            dailyExpiries[marketIds[i]] = enabled;
+            emit DailyExpiriesSet(marketIds[i], enabled);
+        }
+    }
+
+    function setShortDatedSpreadBps(uint256 bps) external onlyOwner {
+        if (bps > 2000) revert BadParams();
+        shortDatedSpreadBps = bps;
+        emit ShortDatedSpreadSet(bps);
+    }
+
+    function _setMarket(uint256 marketId, Market calldata m) internal {
         if (
             m.feed == address(0) || m.heartbeat == 0 || m.vol < 0.05e18 || m.vol > 5e18 || m.spreadBps > 2000
                 || m.minPremiumBps > 500 || m.maxExpiry < 1 weeks || m.maxExpiry > 120 days

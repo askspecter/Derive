@@ -4,7 +4,7 @@ import { waitForTransactionReceipt } from 'wagmi/actions'
 import { erc20Abi, formatUnits, getAddress, getContractAddress, isAddress, parseUnits, zeroAddress, type Address } from 'viem'
 import { robinhood } from '@reown/appkit/networks'
 import { ASSETS } from '../config/markets'
-import { ADDRESSES, ADMIN, DEFAULT_COLLATERAL } from '../config/protocol'
+import { ADDRESSES, ADMIN, DEFAULT_COLLATERAL, OPTIONS_LEGACY } from '../config/protocol'
 import { ROBINHOOD_CHAIN } from '../config/chains'
 import { AssetIcon } from '../components/AssetIcon'
 import { NeedWallet, TxNotice } from '../components/Status'
@@ -117,6 +117,7 @@ export function Admin() {
           <DeploySteps deployer={deployer} addresses={addresses} />
           {p.live && (
             <>
+              <ZeroDteSection deployer={deployer} />
               <MarketsSection />
               <ControlsSection />
               <LiquidationsSection />
@@ -454,6 +455,7 @@ function MarketRow({ idx }: { idx: number }) {
   const a = ASSETS[idx]
   const perp = p.perps.markets[idx]
   const opt = p.options.markets[idx]
+  const daily = p.options.daily[idx]
   const [open, setOpen] = useState(false)
   const [feed, setFeed] = useState<string>(perp?.feed ?? opt?.feed ?? '')
   const [pf, setPf] = useState<PerpForm>(() => perpDefaults(a.kind, perp, p.amount))
@@ -550,6 +552,7 @@ function MarketRow({ idx }: { idx: number }) {
         <span className="market-flags">
           <span className={cls('tag', !perp?.enabled && 'off')}>Perps {perp?.enabled ? 'on' : 'off'}</span>
           <span className={cls('tag', !opt?.enabled && 'off')}>Options {opt?.enabled ? 'on' : 'off'}</span>
+          {daily && <span className="tag zdte">0DTE</span>}
           <span className="muted">{open ? '×' : '+'}</span>
         </span>
       </button>
@@ -607,6 +610,19 @@ function MarketRow({ idx }: { idx: number }) {
                     {opt.enabled ? 'Disable' : 'Enable'}
                   </button>
                 )}
+                {opt && p.options.supportsDaily && (
+                  <button
+                    className="btn btn-ghost btn-sm"
+                    disabled={tx.busy}
+                    onClick={() =>
+                      tx.run(`${a.symbol} 0DTE ${daily ? 'off' : 'on'}`, () =>
+                        tx.write('Daily expiries', { address: opts.options, abi: LarryOptionsAbi, functionName: 'setDailyExpiries', args: [[BigInt(a.id)], !daily] }),
+                      )
+                    }
+                  >
+                    {daily ? 'Turn 0DTE off' : 'Turn 0DTE on'}
+                  </button>
+                )}
               </div>
             </div>
           </div>
@@ -614,6 +630,240 @@ function MarketRow({ idx }: { idx: number }) {
         </div>
       )}
     </div>
+  )
+}
+
+// -------------------------------------------------------------------- 0DTE
+
+/**
+ * Daily (0DTE) expiries need the second options contract. This moves options over without
+ * touching the vault or perps: deploy, copy the market listings, turn on dailies, connect it to
+ * the vault, then point the site at it. Options on the old contract stay claimable.
+ */
+function ZeroDteSection({ deployer }: { deployer: Address }) {
+  const p = useProtocol()
+  const tx = useTx()
+  const config = useConfig()
+  const { deployContractAsync } = useDeployContract()
+  const A = ADDRESSES!
+  const storeKey = `larry:options-v2:${A.pool.toLowerCase()}`
+  const [v2, setV2] = useState<Address | null>(() => {
+    try {
+      const a = localStorage.getItem(storeKey)
+      return a && isAddress(a) ? getAddress(a) : null
+    } catch {
+      return null
+    }
+  })
+  const [copied, setCopied] = useState(false)
+  const listedIdx = ASSETS.map((_, i) => i).filter((i) => !!p.options.markets[i])
+  const [dailyPick, setDailyPick] = useState<number[]>(() => listedIdx.filter((i) => ASSETS[i].kind === 'crypto'))
+
+  const target = v2 ?? zeroAddress
+  const reads = useReadContracts({
+    allowFailure: true,
+    // Mixed contracts in one multicall, read back by index.
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    contracts: [
+      { address: target, abi: LarryOptionsAbi, functionName: 'shortDatedSpreadBps' },
+      { address: A.pool, abi: LarryPoolAbi, functionName: 'isProduct', args: [target] },
+      ...listedIdx.map((i) => ({ address: target, abi: LarryOptionsAbi, functionName: 'markets', args: [BigInt(ASSETS[i].id)] }) as const),
+      ...listedIdx.map((i) => ({ address: target, abi: LarryOptionsAbi, functionName: 'dailyExpiries', args: [BigInt(ASSETS[i].id)] }) as const),
+    ] as any[],
+    query: { enabled: !!v2, refetchInterval: 8000 },
+  })
+  const rd = reads.data ?? []
+  const deployed = rd[0]?.status === 'success'
+  const wired = rd[1]?.result === true
+  const copiedMarkets = deployed && listedIdx.every((_, k) => ((rd[2 + k]?.result as readonly unknown[] | undefined)?.[0] ?? zeroAddress) !== zeroAddress)
+  const dailyOn = deployed && listedIdx.some((_, k) => rd[2 + listedIdx.length + k]?.result === true)
+  const switched = p.options.supportsDaily
+  const old = A.options
+  const envLines = `VITE_LARRY_OPTIONS=${v2 ?? ''}\nVITE_LARRY_OPTIONS_LEGACY=${old}`
+
+  // Already on the daily contract: only the old contract's housekeeping is left.
+  if (switched) {
+    return OPTIONS_LEGACY.length > 0 ? <LegacyOptions /> : null
+  }
+
+  const steps = [
+    {
+      title: 'Deploy the new options contract',
+      done: deployed,
+      body: <p className="muted small">Same vault, same rules, plus daily expiries at 08:00 UTC and an extra spread on options with less than a day left.</p>,
+      action: (
+        <button
+          className="btn btn-accent btn-sm"
+          disabled={tx.busy}
+          onClick={() =>
+            tx.run('Options v2 deployed', async () => {
+              tx.setStatus({ kind: 'pending', label: 'Confirm the deployment in your wallet' })
+              const hash = await deployContractAsync({ chainId: robinhood.id, abi: LarryOptionsAbi, bytecode: LarryOptionsBytecode, args: [A.pool] })
+              tx.setStatus({ kind: 'pending', label: 'Waiting for the block' })
+              const r = await waitForTransactionReceipt(config, { hash, chainId: robinhood.id })
+              if (!r.contractAddress) throw new Error('No contract address in the receipt')
+              const a = getAddress(r.contractAddress)
+              try {
+                localStorage.setItem(storeKey, a)
+              } catch {}
+              setV2(a)
+            })
+          }
+        >
+          Deploy
+        </button>
+      ),
+    },
+    {
+      title: `Copy ${listedIdx.length} options markets`,
+      done: copiedMarkets,
+      body: <p className="muted small">One transaction lists every current options market on the new contract with the same settings.</p>,
+      action: (
+        <button
+          className="btn btn-accent btn-sm"
+          disabled={tx.busy || !deployed}
+          onClick={() =>
+            tx.run('Markets copied', async () => {
+              const ids = listedIdx.map((i) => BigInt(ASSETS[i].id))
+              const ms = listedIdx.map((i) => {
+                const m = p.options.markets[i]!
+                return { feed: m.feed, heartbeat: m.heartbeat, vol: m.vol, spreadBps: m.spreadBps, minPremiumBps: m.minPremiumBps, maxExpiry: m.maxExpiry, maxOpenNotional: m.maxOpenNotional, enabled: m.enabled }
+              })
+              await tx.write('Copy markets', { address: v2!, abi: LarryOptionsAbi, functionName: 'setMarkets', args: [ids, ms] })
+              if (p.options.protocolFeeBps !== 30)
+                await tx.write('Copy fee', { address: v2!, abi: LarryOptionsAbi, functionName: 'setProtocolFeeBps', args: [BigInt(p.options.protocolFeeBps)] })
+            })
+          }
+        >
+          Copy
+        </button>
+      ),
+    },
+    {
+      title: 'Turn on 0DTE',
+      done: dailyOn,
+      body: (
+        <div>
+          <p className="muted small">Pick the markets that get daily expiries. Crypto trades around the clock; stock feeds only update in market hours, so leave stocks on Fridays.</p>
+          <div className="pick-list">
+            {listedIdx.map((i) => (
+              <label key={i} className={cls('pick', dailyPick.includes(i) && 'on')}>
+                <input type="checkbox" checked={dailyPick.includes(i)} onChange={(e) => setDailyPick(e.target.checked ? [...dailyPick, i] : dailyPick.filter((x) => x !== i))} />
+                {ASSETS[i].symbol}
+              </label>
+            ))}
+          </div>
+        </div>
+      ),
+      action: (
+        <button
+          className="btn btn-accent btn-sm"
+          disabled={tx.busy || !copiedMarkets || dailyPick.length === 0}
+          onClick={() =>
+            tx.run('0DTE on', () =>
+              tx.write('Daily expiries', { address: v2!, abi: LarryOptionsAbi, functionName: 'setDailyExpiries', args: [dailyPick.map((i) => BigInt(ASSETS[i].id)), true] }),
+            )
+          }
+        >
+          Turn on
+        </button>
+      ),
+    },
+    {
+      title: 'Connect it to the vault',
+      done: wired,
+      body: <p className="muted small">The old options contract stays connected so its options can still be claimed.</p>,
+      action: (
+        <button
+          className="btn btn-accent btn-sm"
+          disabled={tx.busy || !dailyOn}
+          onClick={() => tx.run('Connected', () => tx.write('Enable options v2', { address: A.pool, abi: LarryPoolAbi, functionName: 'setProduct', args: [v2!, true] }))}
+        >
+          Connect
+        </button>
+      ),
+    },
+  ]
+  const allDone = steps.every((s) => s.done)
+
+  return (
+    <Section n="0DTE" title="Upgrade options for daily expiries" hint={`Signed by ${shortAddr(deployer)}. Nothing changes for traders until the site points at the new contract.`}>
+      <ol className="deploy-steps">
+        {steps.map((s, i) => (
+          <li key={s.title} className={cls(s.done && 'done')}>
+            <span className="step-n">{s.done ? '✓' : String(i + 1).padStart(2, '0')}</span>
+            <div className="deploy-body">
+              <b>{s.title}</b>
+              {!s.done && s.body}
+              {i === 0 && v2 && (
+                <a className="mono small muted" href={explorer(v2)} target="_blank" rel="noreferrer">
+                  {v2}
+                </a>
+              )}
+            </div>
+            {!s.done && s.action}
+          </li>
+        ))}
+      </ol>
+      <TxNotice status={tx.status} />
+      {allDone && (
+        <div className="callout">
+          <b>Last step: point the site at the new contract</b>
+          <div>
+            Set these in Vercel, Settings, Environment Variables, then redeploy. The second line keeps options bought on the old contract visible and claimable.
+            <pre className="code">{envLines}</pre>
+            <button
+              className="btn btn-ghost btn-sm"
+              onClick={async () => {
+                try {
+                  await navigator.clipboard.writeText(envLines)
+                  setCopied(true)
+                  setTimeout(() => setCopied(false), 1500)
+                } catch {}
+              }}
+            >
+              {copied ? 'Copied' : 'Copy'}
+            </button>
+          </div>
+        </div>
+      )}
+    </Section>
+  )
+}
+
+/** The previous options contract after the move: stop new buys there, keep claims working. */
+function LegacyOptions() {
+  const tx = useTx()
+  const old = OPTIONS_LEGACY[0]
+  const q = useReadContracts({
+    allowFailure: true,
+    contracts: [
+      { address: old, abi: LarryOptionsAbi, functionName: 'paused' },
+      { address: ADDRESSES!.pool, abi: LarryPoolAbi, functionName: 'totalReserved' },
+    ],
+    query: { refetchInterval: 15_000 },
+  })
+  const paused = q.data?.[0]?.result === true
+  return (
+    <Section n="0DTE" title="Old options contract" hint="0DTE is live on the new contract. The old one only needs to let its last options settle and be claimed.">
+      <div className="switches">
+        <div className="switch-row">
+          <div>
+            <b>Buying on the old contract</b>
+            <div className="mono small muted">{shortAddr(old)}</div>
+          </div>
+          <button
+            className={cls('btn btn-sm', paused ? 'btn-ghost' : 'btn-accent')}
+            disabled={tx.busy}
+            onClick={() => tx.run(paused ? 'Old contract resumed' : 'Old contract paused', () => tx.write('Old options pause', { address: old, abi: LarryOptionsAbi, functionName: 'setPaused', args: [!paused] }))}
+          >
+            {paused ? 'Paused, resume' : 'Pause new buys'}
+          </button>
+        </div>
+      </div>
+      <p className="muted small">Keep it connected to the vault: claims and settlement still go through it. Pausing does not block either.</p>
+      <TxNotice status={tx.status} />
+    </Section>
   )
 }
 
@@ -629,6 +879,7 @@ function ControlsSection() {
   const [treasury, setTreasury] = useState<string>(p.pool.treasury ?? '')
   const [share, setShare] = useState(String(p.perps.protocolShareBps))
   const [optFee, setOptFee] = useState(String(p.options.protocolFeeBps))
+  const [shortSpread, setShortSpread] = useState(String(p.options.shortDatedSpreadBps))
   const [minCol, setMinCol] = useState(String(p.amount(p.perps.minCollateral)))
 
   const sw = (label: string, on: boolean, act: () => Promise<unknown>) => (
@@ -678,6 +929,14 @@ function ControlsSection() {
             Save
           </button>
         </div>
+        {p.options.supportsDaily && (
+          <div className="control">
+            <Field label="Extra spread under 1 day (0DTE)" suffix="bps" value={shortSpread} onChange={setShortSpread} />
+            <button className="btn btn-ghost btn-sm" disabled={tx.busy} onClick={() => tx.run('Saved', () => tx.write('Set 0DTE spread', { address: A.options, abi: LarryOptionsAbi, functionName: 'setShortDatedSpreadBps', args: [BigInt(shortSpread || '0')] }))}>
+              Save
+            </button>
+          </div>
+        )}
         <div className="control">
           <Field label="Min perp collateral" suffix={p.token?.symbol} value={minCol} onChange={setMinCol} />
           <button className="btn btn-ghost btn-sm" disabled={tx.busy} onClick={() => tx.run('Saved', () => tx.write('Set min', { address: A.perps, abi: LarryPerpsAbi, functionName: 'setMinCollateral', args: [parseUnits(minCol || '0', d)] }))}>

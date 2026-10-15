@@ -30,8 +30,19 @@ export function blackScholes(isCall: boolean, S: number, K: number, years: numbe
 }
 
 /** Premium per contract as LarryOptions.quote computes it, before the protocol fee. */
-export function contractPremium(isCall: boolean, S: number, K: number, years: number, vol: number, spreadBps: number, minPremiumBps: number) {
-  let p = blackScholes(isCall, S, K, years, vol).price * (1 + spreadBps / 1e4)
+export function contractPremium(
+  isCall: boolean,
+  S: number,
+  K: number,
+  years: number,
+  vol: number,
+  spreadBps: number,
+  minPremiumBps: number,
+  shortDatedSpreadBps = 0,
+) {
+  // Mirrors LarryOptions: options with under a day left carry an extra spread.
+  const spread = spreadBps + (years < 1 / 365 ? shortDatedSpreadBps : 0)
+  let p = blackScholes(isCall, S, K, years, vol).price * (1 + spread / 1e4)
   p = Math.max(p, (S * minPremiumBps) / 1e4)
   return Math.min(p, K)
 }

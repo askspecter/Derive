@@ -402,6 +402,76 @@ test('options: guards for expiry, strike, caps, pause and manual settle delay', 
   await send(admin, options, app.LarryOptions.abi, 'settleManual', [ETH_MARKET, expiry, wad(3000)])
 })
 
+test('options: daily 0DTE expiries only on opted in markets, with the short dated spread', async () => {
+  const DAY = 86400n
+  const t = await now()
+  // next 08:00 UTC more than an hour away that is not a Friday
+  let e = t - ((t - 28800n) % DAY) + DAY
+  if (e <= t + 3600n) e += DAY
+  if (e % WEEK === FRIDAY_0800) e += DAY
+  // move to six hours before that expiry, with a fresh oracle price
+  if (e - t > 6n * 3600n) await warp(e - t - 6n * 3600n)
+  await setEth(3000)
+  const q = (K) => read(options, app.LarryOptions.abi, 'quote', [ETH_MARKET, true, wad(K), e, wad(1)])
+  await reverts(q(3000), 'BadExpiry')
+  assert.equal(await read(options, app.LarryOptions.abi, 'isValidExpiryFor', [ETH_MARKET, e]), false)
+
+  await reverts(send(alice, options, app.LarryOptions.abi, 'setDailyExpiries', [[ETH_MARKET], true]), 'OwnableUnauthorizedAccount')
+  await reverts(send(admin, options, app.LarryOptions.abi, 'setDailyExpiries', [[ETH_MARKET, 9n], true]), 'BadParams') // 9 is not listed
+  await send(admin, options, app.LarryOptions.abi, 'setDailyExpiries', [[ETH_MARKET], true])
+  assert.equal(await read(options, app.LarryOptions.abi, 'isValidExpiryFor', [ETH_MARKET, e]), true)
+  // not 08:00 is still rejected
+  await reverts(read(options, app.LarryOptions.abi, 'quote', [ETH_MARKET, true, wad(3000), e + 3600n, wad(1)]), 'BadExpiry')
+
+  // under a day to expiry: market spread plus the short dated spread (3% + 3%)
+  const T = Number(e - (await now())) / (365 * 86400)
+  assert.ok(T * 365 < 1)
+  const [premium] = await q(3000)
+  const model = Math.max(bs(true, 3000, 3000, T, 0.6) * 1.06, 3000 * 0.0005)
+  const got = Number(formatUnits(premium, 6))
+  assert.ok(Math.abs(got - model) / model < 0.003, `chain ${got} vs model ${model.toFixed(4)}`)
+  await reverts(send(admin, options, app.LarryOptions.abi, 'setShortDatedSpreadBps', [2001n]), 'BadParams')
+  await send(admin, options, app.LarryOptions.abi, 'setShortDatedSpreadBps', [500n])
+  assert.equal(await read(options, app.LarryOptions.abi, 'shortDatedSpreadBps'), 500n)
+
+  // buy, settle at the daily expiry, exercise
+  const [p, f, maxPayout] = await q(3000)
+  await send(alice, options, app.LarryOptions.abi, 'buy', [ETH_MARKET, true, wad(3000), e, wad(1), p + f])
+  assert.equal(await P('totalReserved'), maxPayout)
+  const [id] = await optIdsOf(alice)
+  const t0 = await now()
+  await warp(e - t0 + 5n)
+  const r = (await read(ethFeed, mocks.MockAggregator.abi, 'latestRound')) + 1n
+  await setEth(3120)
+  await send(bob, options, app.LarryOptions.abi, 'settle', [ETH_MARKET, e, r])
+  const before = await bal(alice)
+  await send(bob, options, app.LarryOptions.abi, 'exercise', [id])
+  assert.equal((await bal(alice)) - before, usd(120))
+  assert.equal(await P('totalReserved'), 0n)
+
+  // turning dailies off stops new daily buys, Fridays keep working
+  await send(admin, options, app.LarryOptions.abi, 'setDailyExpiries', [[ETH_MARKET], false])
+  const t1 = await now()
+  let e2 = t1 - ((t1 - 28800n) % DAY) + DAY
+  if (e2 <= t1 + 3600n) e2 += DAY
+  if (e2 % WEEK === FRIDAY_0800) e2 += DAY
+  await reverts(read(options, app.LarryOptions.abi, 'quote', [ETH_MARKET, true, wad(3000), e2, wad(1)]), 'BadExpiry')
+  await read(options, app.LarryOptions.abi, 'quote', [ETH_MARKET, true, wad(3000), await nextExpiry(), wad(1)])
+  await assertSolvent()
+})
+
+test('options: setMarkets lists several markets in one transaction', async () => {
+  const btcFeed = await deploy(keeper, mocks.MockAggregator, [8, 'BTC / USD', feedPx(100000)])
+  await reverts(send(admin, options, app.LarryOptions.abi, 'setMarkets', [[1n, 2n], [optMarket(btcFeed)]]), 'BadParams')
+  await reverts(send(alice, options, app.LarryOptions.abi, 'setMarkets', [[1n], [optMarket(btcFeed)]]), 'OwnableUnauthorizedAccount')
+  await send(admin, options, app.LarryOptions.abi, 'setMarkets', [[1n, 2n], [optMarket(btcFeed), { ...optMarket(btcFeed), enabled: false }]])
+  const m1 = await read(options, app.LarryOptions.abi, 'markets', [1n])
+  const m2 = await read(options, app.LarryOptions.abi, 'markets', [2n])
+  assert.equal(m1[0].toLowerCase(), btcFeed.toLowerCase())
+  assert.equal(m1[7], true)
+  assert.equal(m2[7], false)
+})
+
 test('admin: ownership transfer is two step', async () => {
   await send(admin, pool, app.LarryPool.abi, 'transferOwnership', [bob])
   assert.equal((await P('owner')).toLowerCase(), admin.toLowerCase())

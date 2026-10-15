@@ -4,7 +4,7 @@ import { useConfig, useReadContract, useReadContracts } from 'wagmi'
 import { readContract } from 'wagmi/actions'
 import { formatUnits, parseUnits, zeroAddress, type Address } from 'viem'
 import { ASSETS, assetBySymbol, assetIndex, indexOfMarketId } from '../config/markets'
-import { ADDRESSES } from '../config/protocol'
+import { ADDRESSES, OPTIONS_LEGACY } from '../config/protocol'
 import { AssetTabs } from '../components/AssetTabs'
 import { PriceChart } from '../components/PriceChart'
 import { NeedWallet, NotLive, TxNotice } from '../components/Status'
@@ -18,6 +18,11 @@ import { useWallet } from '../lib/wallet'
 import { cls, compactUsd, dateLabel, num, pct, usd } from '../lib/format'
 
 const YEAR = 365 * 86400
+
+const hoursLeft = (ts: number) => {
+  const m = Math.max(0, Math.round((ts - Date.now() / 1000) / 60))
+  return m >= 60 ? `${Math.floor(m / 60)}h ${m % 60}m` : `${m}m`
+}
 
 interface Selection {
   isCall: boolean
@@ -67,6 +72,10 @@ export function Options() {
                       <div className="muted small">Open notional</div>
                       <div className="mono">{compactUsd(p.amount(p.options.openNotional[idx]))}</div>
                     </div>
+                    <div>
+                      <div className="muted small">Expiries</div>
+                      <div className="mono">{p.options.daily[idx] ? <>Daily <span className="tag zdte">0DTE</span></> : 'Fridays'}</div>
+                    </div>
                   </div>
                 </div>
                 <PriceChart points={history} height={220} />
@@ -81,7 +90,13 @@ export function Options() {
 }
 
 function Chain({ symbol, idx, market, spot }: { symbol: string; idx: number; market: OptionMarket; spot: number }) {
-  const expiries = useMemo(() => validExpiries(market.maxExpiry), [market.maxExpiry])
+  const p = useProtocol()
+  const daily = p.options.daily[idx]
+  // The 0DTE label only appears once daily expiries exist (options contract v2).
+  const expiries = useMemo(
+    () => validExpiries(market.maxExpiry, daily).map((e) => ({ ...e, zeroDte: e.zeroDte && p.options.supportsDaily })),
+    [market.maxExpiry, daily, p.options.supportsDaily],
+  )
   const [expIdx, setExpIdx] = useState(0)
   const [sel, setSel] = useState<Selection | null>(null)
   const expiry = expiries[Math.min(expIdx, expiries.length - 1)]
@@ -93,7 +108,7 @@ function Chain({ symbol, idx, market, spot }: { symbol: string; idx: number; mar
   if (!expiry) return <div className="card">No expiries available.</div>
   const years = expiry.days / 365
   const q = (isCall: boolean, k: number) => ({
-    ask: contractPremium(isCall, spot, k, years, vol, market.spreadBps, market.minPremiumBps),
+    ask: contractPremium(isCall, spot, k, years, vol, market.spreadBps, market.minPremiumBps, p.options.shortDatedSpreadBps),
     delta: blackScholes(isCall, spot, k, years, vol).delta,
   })
 
@@ -103,12 +118,15 @@ function Chain({ symbol, idx, market, spot }: { symbol: string; idx: number; mar
         <div className="chain-head">
           <div className="seg">
             {expiries.map((e, i) => (
-              <button key={e.ts} className={cls(e.ts === expiry.ts && 'active')} onClick={() => setExpIdx(i)}>
+              <button key={e.ts} className={cls(e.ts === expiry.ts && 'active', e.zeroDte && 'zdte-btn')} onClick={() => setExpIdx(i)}>
                 {e.label}
+                {e.zeroDte && <span className="tag zdte">0DTE</span>}
               </button>
             ))}
           </div>
-          <div className="muted small">Click a price to buy. Expiry 08:00 UTC.</div>
+          <div className="muted small">
+            {expiry.zeroDte ? `0DTE: expires in ${hoursLeft(expiry.ts)} at 08:00 UTC. Click a price to buy.` : 'Click a price to buy. Expiry 08:00 UTC.'}
+          </div>
         </div>
         <div className="table-wrap">
           <table className="table chain">
@@ -248,26 +266,29 @@ export function OptionPositions() {
   const w = useWallet()
   const tx = useTx()
   const config = useConfig()
-  const options = ADDRESSES?.options ?? zeroAddress
-  const ids = useReadContract({
-    address: options,
-    abi: LarryOptionsAbi,
-    functionName: 'optionIdsOf',
-    args: [(w.address ?? zeroAddress) as Address],
-    query: { enabled: !!w.address, refetchInterval: 15_000 },
+  // The current options contract first, then earlier ones whose options can still be claimed.
+  const sources = [ADDRESSES?.options ?? zeroAddress, ...OPTIONS_LEGACY]
+  const me = (w.address ?? zeroAddress) as Address
+  const idsQ = useReadContracts({
+    allowFailure: true,
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    contracts: sources.map((address) => ({ address, abi: LarryOptionsAbi, functionName: 'optionIdsOf', args: [me] })) as any[],
+    query: { enabled: !!w.address && !!ADDRESSES, refetchInterval: 15_000 },
   })
-  const list = [...(ids.data ?? [])].reverse()
+  const list = sources.flatMap((contract, s) =>
+    [...((idsQ.data?.[s]?.result as readonly bigint[] | undefined) ?? [])].reverse().map((id) => ({ contract, id, legacy: s > 0 })),
+  )
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const calls: any[] = list.flatMap((id) => [
-    { address: options, abi: LarryOptionsAbi, functionName: 'getOption', args: [id] },
-    { address: options, abi: LarryOptionsAbi, functionName: 'payoutOf', args: [id] },
+  const calls: any[] = list.flatMap(({ contract, id }) => [
+    { address: contract, abi: LarryOptionsAbi, functionName: 'getOption', args: [id] },
+    { address: contract, abi: LarryOptionsAbi, functionName: 'payoutOf', args: [id] },
   ])
   const rows = useReadContracts({ allowFailure: true, contracts: calls, query: { enabled: list.length > 0, refetchInterval: 15_000 } })
-  const opts = list.map((id, i) => ({ id, o: rows.data?.[2 * i]?.result as OptionRow | undefined, payout: rows.data?.[2 * i + 1]?.result as bigint | undefined }))
+  const opts = list.map((x, i) => ({ ...x, o: rows.data?.[2 * i]?.result as OptionRow | undefined, payout: rows.data?.[2 * i + 1]?.result as bigint | undefined }))
   const settledQ = useReadContracts({
     allowFailure: true,
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    contracts: opts.map(({ o }) => ({ address: options, abi: LarryOptionsAbi, functionName: 'settlementPrice', args: [BigInt(o?.marketId ?? 0), o?.expiry ?? 0n] })) as any[],
+    contracts: opts.map(({ contract, o }) => ({ address: contract, abi: LarryOptionsAbi, functionName: 'settlementPrice', args: [BigInt(o?.marketId ?? 0), o?.expiry ?? 0n] })) as any[],
     query: { enabled: opts.length > 0, refetchInterval: 15_000 },
   })
   const nowS = Date.now() / 1000
@@ -284,16 +305,17 @@ export function OptionPositions() {
     throw new Error('Could not find the settlement round. Try again later.')
   }
 
-  const settleAndClaim = (id: bigint, o: OptionRow, settled: boolean) =>
+  const settleAndClaim = (contract: Address, id: bigint, o: OptionRow, settled: boolean) =>
     tx.run('Payout claimed', async () => {
       if (!settled) {
-        const feed = p.options.markets[indexOfMarketId(o.marketId)]?.feed
-        if (!feed) throw new Error('Market has no feed')
+        // Each contract settles against its own feed for the market.
+        const [feed] = await readContract(config, { address: contract, abi: LarryOptionsAbi, functionName: 'markets', args: [BigInt(o.marketId)] })
+        if (!feed || feed === zeroAddress) throw new Error('Market has no feed')
         tx.setStatus({ kind: 'pending', label: 'Finding the settlement price' })
         const round = await findSettlementRound(feed, o.expiry)
-        await tx.write('Settle expiry', { address: options, abi: LarryOptionsAbi, functionName: 'settle', args: [BigInt(o.marketId), o.expiry, round] })
+        await tx.write('Settle expiry', { address: contract, abi: LarryOptionsAbi, functionName: 'settle', args: [BigInt(o.marketId), o.expiry, round] })
       }
-      await tx.write('Claim', { address: options, abi: LarryOptionsAbi, functionName: 'exercise', args: [id] })
+      await tx.write('Claim', { address: contract, abi: LarryOptionsAbi, functionName: 'exercise', args: [id] })
     })
 
   return (
@@ -317,7 +339,7 @@ export function OptionPositions() {
               </tr>
             </thead>
             <tbody>
-              {opts.map(({ id, o, payout }, i) => {
+              {opts.map(({ contract, id, legacy, o, payout }, i) => {
                 if (!o) return null
                 const sym = ASSETS[indexOfMarketId(o.marketId)]?.symbol ?? '?'
                 const settlePx = settledQ.data?.[i]?.result as bigint | undefined
@@ -325,9 +347,10 @@ export function OptionPositions() {
                 const expired = Number(o.expiry) <= nowS
                 const status = o.exercised ? 'Closed' : settled ? `Settled at ${usd(Number(formatUnits(settlePx!, 18)))}` : expired ? 'Awaiting settlement' : 'Active'
                 return (
-                  <tr key={String(id)}>
+                  <tr key={`${contract}:${id}`}>
                     <td className="mono">
                       {sym} {dateLabel(Number(o.expiry) * 1000).toUpperCase()} {num(Number(formatUnits(o.strike, 18)), 2)} {o.isCall ? 'C' : 'P'}
+                      {legacy && <span className="tag off" title="Bought on the earlier options contract">v1</span>}
                     </td>
                     <td className="r mono">{num(Number(formatUnits(o.amount, 18)), 3)}</td>
                     <td className="r mono">{usd(p.amount(o.premium))}</td>
@@ -335,7 +358,7 @@ export function OptionPositions() {
                     <td className="r mono">{settled || o.exercised ? usd(p.amount(payout ?? 0n)) : ''}</td>
                     <td className="r">
                       {!o.exercised && expired && (
-                        <button className="btn btn-sm btn-accent" disabled={tx.busy} onClick={() => settleAndClaim(id, o, settled)}>
+                        <button className="btn btn-sm btn-accent" disabled={tx.busy} onClick={() => settleAndClaim(contract, id, o, settled)}>
                           {settled ? 'Claim' : 'Settle and claim'}
                         </button>
                       )}

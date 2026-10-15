@@ -3,7 +3,9 @@ import { NavLink, useParams } from 'react-router-dom'
 import { SmartLink as Link } from '../components/SmartLink'
 import { ROBINHOOD_CHAIN } from '../config/chains'
 import { ASSETS } from '../config/markets'
-import { ADDRESSES } from '../config/protocol'
+import { ADDRESSES, OPTIONS_LEGACY } from '../config/protocol'
+import { LARRY_TOKEN } from '../config/token'
+import { TokenCA } from '../components/TokenCA'
 import { AssetIcon } from '../components/AssetIcon'
 
 interface Page {
@@ -61,7 +63,7 @@ const PAGES: Page[] = [
           <Link to="/docs/options" className="doc-card">
             <span className="eyebrow accent">Trade</span>
             <b>Options</b>
-            <span className="muted">Buy calls and puts with weekly Friday expiries.</span>
+            <span className="muted">Buy calls and puts with daily 0DTE and Friday expiries.</span>
           </Link>
           <Link to="/docs/vault" className="doc-card">
             <span className="eyebrow accent">Earn</span>
@@ -256,9 +258,23 @@ const PAGES: Page[] = [
         </p>
         <h2>Expiries and strikes</h2>
         <p>
-          Options expire on Fridays at 08:00 UTC and can be bought until an hour before. Strikes can be anywhere from
-          half to twice the current price.
+          Options expire at 08:00 UTC. Every market lists Friday expiries, and markets with 0DTE also list an expiry
+          every day. All can be bought until an hour before expiry. Strikes can be anywhere from half to twice the
+          current price.
         </p>
+        <h2>0DTE options</h2>
+        <p>
+          An option with less than a day left is a 0DTE option. It lets you trade one idea for one day: buy in the
+          morning, and it settles at the next 08:00 UTC. The chain marks these expiries with a <span className="kbd">0DTE</span> tag.
+        </p>
+        <ul>
+          <li>Daily expiries are switched on per market. Crypto trades around the clock, so it gets them first.</li>
+          <li>
+            Options this short are very sensitive to small price moves and to oracle delay, so they carry an extra
+            spread on top of the market spread. The order ticket always shows the exact onchain price.
+          </li>
+          <li>Like every Larry option, the full payout is reserved in the vault before you buy.</li>
+        </ul>
         <h2>Pricing</h2>
         <p>
           The premium is computed onchain with Black Scholes using the market&apos;s implied volatility, plus a spread
@@ -367,6 +383,8 @@ const PAGES: Page[] = [
             ['LarryPool', ADDRESSES.pool],
             ['LarryPerps', ADDRESSES.perps],
             ['LarryOptions', ADDRESSES.options],
+            ...OPTIONS_LEGACY.map((a) => ['LarryOptions (earlier)', a]),
+            ['$LARRY token', LARRY_TOKEN.address],
           ].map(([k, v]) => (
             <tr key={k}>
               <th>{k}</th>
@@ -381,6 +399,22 @@ const PAGES: Page[] = [
       </table>
     ) : (
       <p>Contract addresses will appear here at launch.</p>
+    ),
+  },
+  {
+    slug: 'token',
+    group: 'Protocol',
+    title: '$LARRY token',
+    summary: 'The official $LARRY contract address.',
+    body: (
+      <>
+        <p>$LARRY is the official token of Larry on Robinhood Chain. This is its only contract address:</p>
+        <TokenCA />
+        <Callout kind="warn" title="Check the address">
+          Copies with the same name can be created by anyone. Only trust the address above, which is also shown in the
+          site footer and on our X account.
+        </Callout>
+      </>
     ),
   },
   {
@@ -404,7 +438,8 @@ const PAGES: Page[] = [
             <b>Liquidation risk.</b> Leveraged perps can be closed at a loss when they fall below maintenance margin.
           </li>
           <li>
-            <b>Oracle risk.</b> A wrong or delayed Chainlink price affects trades and settlements.
+            <b>Oracle risk.</b> A wrong or delayed Chainlink price affects trades and settlements. This matters most
+            for 0DTE options, which have hours rather than days left.
           </li>
           <li>
             <b>Vault risk.</b> When traders win, LPs lose.

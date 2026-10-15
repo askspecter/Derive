@@ -48,6 +48,24 @@ Logos are bundled in `public/tokens`. ETH uses the Robinhood feather mark; BTC a
 5. Seed the vault with liquidity from any wallet on `/#/vaults`.
 6. Optional but recommended: transfer ownership to a multisig (Safe) in **Ownership**.
 
+### Turning on 0DTE (daily expiries)
+
+The first options contract only lists Friday expiries. Daily expiries come with the second one, which plugs
+into the same vault. On `/#/admin` with the admin wallet, the **Upgrade options for daily expiries** section
+walks through it (four signatures):
+
+1. Deploy the new options contract
+2. Copy every current options market to it (one transaction)
+3. Turn on 0DTE for the markets you pick (crypto by default; stock feeds only update in market hours)
+4. Connect it to the vault
+
+Then set `VITE_LARRY_OPTIONS=<new address>` and `VITE_LARRY_OPTIONS_LEGACY=<old address>` in Vercel and
+redeploy. Options bought on the old contract stay visible and claimable, and the old contract must stay
+connected to the vault until they are all settled. The admin page then offers to pause new buys on it.
+
+Options with less than a day left carry an extra spread (`shortDatedSpreadBps`, 3% by default) on top of the
+market spread, set in **Controls**.
+
 **The contracts are not audited.** Keep the deposit cap and open interest caps low until they are.
 
 ## Wallet connection (Reown)

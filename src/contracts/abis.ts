@@ -2574,6 +2574,25 @@ export const LarryOptionsAbi = [
       {
         "indexed": true,
         "internalType": "uint256",
+        "name": "marketId",
+        "type": "uint256"
+      },
+      {
+        "indexed": false,
+        "internalType": "bool",
+        "name": "enabled",
+        "type": "bool"
+      }
+    ],
+    "name": "DailyExpiriesSet",
+    "type": "event"
+  },
+  {
+    "anonymous": false,
+    "inputs": [
+      {
+        "indexed": true,
+        "internalType": "uint256",
         "name": "id",
         "type": "uint256"
       },
@@ -2817,6 +2836,19 @@ export const LarryOptionsAbi = [
     "type": "event"
   },
   {
+    "anonymous": false,
+    "inputs": [
+      {
+        "indexed": false,
+        "internalType": "uint256",
+        "name": "bps",
+        "type": "uint256"
+      }
+    ],
+    "name": "ShortDatedSpreadSet",
+    "type": "event"
+  },
+  {
     "inputs": [],
     "name": "MANUAL_SETTLE_DELAY",
     "outputs": [
@@ -2888,6 +2920,25 @@ export const LarryOptionsAbi = [
         "internalType": "contract IERC20",
         "name": "",
         "type": "address"
+      }
+    ],
+    "stateMutability": "view",
+    "type": "function"
+  },
+  {
+    "inputs": [
+      {
+        "internalType": "uint256",
+        "name": "",
+        "type": "uint256"
+      }
+    ],
+    "name": "dailyExpiries",
+    "outputs": [
+      {
+        "internalType": "bool",
+        "name": "",
+        "type": "bool"
       }
     ],
     "stateMutability": "view",
@@ -2981,6 +3032,30 @@ export const LarryOptionsAbi = [
       }
     ],
     "name": "isValidExpiry",
+    "outputs": [
+      {
+        "internalType": "bool",
+        "name": "",
+        "type": "bool"
+      }
+    ],
+    "stateMutability": "view",
+    "type": "function"
+  },
+  {
+    "inputs": [
+      {
+        "internalType": "uint256",
+        "name": "marketId",
+        "type": "uint256"
+      },
+      {
+        "internalType": "uint256",
+        "name": "expiry",
+        "type": "uint256"
+      }
+    ],
+    "name": "isValidExpiryFor",
     "outputs": [
       {
         "internalType": "bool",
@@ -3239,6 +3314,24 @@ export const LarryOptionsAbi = [
   {
     "inputs": [
       {
+        "internalType": "uint256[]",
+        "name": "marketIds",
+        "type": "uint256[]"
+      },
+      {
+        "internalType": "bool",
+        "name": "enabled",
+        "type": "bool"
+      }
+    ],
+    "name": "setDailyExpiries",
+    "outputs": [],
+    "stateMutability": "nonpayable",
+    "type": "function"
+  },
+  {
+    "inputs": [
+      {
         "internalType": "uint256",
         "name": "marketId",
         "type": "uint256"
@@ -3317,6 +3410,66 @@ export const LarryOptionsAbi = [
   {
     "inputs": [
       {
+        "internalType": "uint256[]",
+        "name": "marketIds",
+        "type": "uint256[]"
+      },
+      {
+        "components": [
+          {
+            "internalType": "address",
+            "name": "feed",
+            "type": "address"
+          },
+          {
+            "internalType": "uint32",
+            "name": "heartbeat",
+            "type": "uint32"
+          },
+          {
+            "internalType": "uint64",
+            "name": "vol",
+            "type": "uint64"
+          },
+          {
+            "internalType": "uint16",
+            "name": "spreadBps",
+            "type": "uint16"
+          },
+          {
+            "internalType": "uint16",
+            "name": "minPremiumBps",
+            "type": "uint16"
+          },
+          {
+            "internalType": "uint32",
+            "name": "maxExpiry",
+            "type": "uint32"
+          },
+          {
+            "internalType": "uint128",
+            "name": "maxOpenNotional",
+            "type": "uint128"
+          },
+          {
+            "internalType": "bool",
+            "name": "enabled",
+            "type": "bool"
+          }
+        ],
+        "internalType": "struct LarryOptions.Market[]",
+        "name": "ms",
+        "type": "tuple[]"
+      }
+    ],
+    "name": "setMarkets",
+    "outputs": [],
+    "stateMutability": "nonpayable",
+    "type": "function"
+  },
+  {
+    "inputs": [
+      {
         "internalType": "bool",
         "name": "p",
         "type": "bool"
@@ -3336,6 +3489,19 @@ export const LarryOptionsAbi = [
       }
     ],
     "name": "setProtocolFeeBps",
+    "outputs": [],
+    "stateMutability": "nonpayable",
+    "type": "function"
+  },
+  {
+    "inputs": [
+      {
+        "internalType": "uint256",
+        "name": "bps",
+        "type": "uint256"
+      }
+    ],
+    "name": "setShortDatedSpreadBps",
     "outputs": [],
     "stateMutability": "nonpayable",
     "type": "function"
@@ -3418,6 +3584,19 @@ export const LarryOptionsAbi = [
       }
     ],
     "name": "settlementPrice",
+    "outputs": [
+      {
+        "internalType": "uint256",
+        "name": "",
+        "type": "uint256"
+      }
+    ],
+    "stateMutability": "view",
+    "type": "function"
+  },
+  {
+    "inputs": [],
+    "name": "shortDatedSpreadBps",
     "outputs": [
       {
         "internalType": "uint256",

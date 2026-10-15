@@ -163,7 +163,7 @@ async function waitText(page, text, timeout = 60000) {
     await shot('8-stats')
     // ---------------------------------------------------------- no dashes anywhere
     const dashes = {}
-    for (const r of ['/', '/perps', '/options', '/vaults', '/portfolio', '/stats', '/admin', '/docs/introduction', '/docs/perpetuals', '/docs/options', '/docs/vault', '/docs/fees', '/docs/contracts', '/docs/risks', '/docs/faq']) {
+    for (const r of ['/', '/perps', '/options', '/vaults', '/portfolio', '/stats', '/admin', '/docs/introduction', '/docs/perpetuals', '/docs/options', '/docs/vault', '/docs/fees', '/docs/contracts', '/docs/token', '/docs/risks', '/docs/faq']) {
       await page.goto(`${url}/#${r}`)
       await page.waitForTimeout(1200)
       const t = await page.evaluate(() => document.body.innerText)

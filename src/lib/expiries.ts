@@ -1,28 +1,42 @@
-// Mirrors LarryOptions: expiries are Fridays at 08:00 UTC, buyable until an hour before.
+// Mirrors LarryOptions: expiries are Fridays at 08:00 UTC, plus every day at 08:00 UTC on
+// markets with daily expiries. All are buyable until an hour before.
+const DAY = 86400
 const WEEK = 604800
+const DAY_0800 = 28800
 const FRIDAY_0800 = 115200
+/** Daily expiries are shown for this many days ahead; Fridays beyond that. */
+const DAILY_DAYS = 7
 
 export interface Expiry {
   ts: number
   label: string
   days: number
+  /** Expires within a day: a 0DTE option. */
+  zeroDte: boolean
+  /** A daily expiry that is not a Friday. */
+  daily: boolean
 }
 
-export function validExpiries(maxExpirySeconds: number, nowS = Math.floor(Date.now() / 1000)): Expiry[] {
-  const out: Expiry[] = []
-  let e = nowS - ((nowS - FRIDAY_0800) % WEEK) + WEEK
-  if (e - WEEK > nowS + 3600) e -= WEEK
-  for (; e <= nowS + maxExpirySeconds; e += WEEK) {
-    if (e <= nowS + 3600) continue
-    out.push({
-      ts: e,
-      days: (e - nowS) / 86400,
-      label: new Date(e * 1000).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', timeZone: 'UTC' }).toUpperCase(),
-    })
+export function validExpiries(maxExpirySeconds: number, daily = false, nowS = Math.floor(Date.now() / 1000)): Expiry[] {
+  const ts = new Set<number>()
+  // Fridays
+  let e = nowS - ((nowS - FRIDAY_0800) % WEEK)
+  for (; e <= nowS + maxExpirySeconds; e += WEEK) if (e > nowS + 3600) ts.add(e)
+  // Every day at 08:00 for the next week
+  if (daily) {
+    let d = nowS - ((nowS - DAY_0800) % DAY)
+    for (; d <= nowS + Math.min(maxExpirySeconds, DAILY_DAYS * DAY); d += DAY) if (d > nowS + 3600) ts.add(d)
   }
-  return out
+  return [...ts]
+    .sort((a, b) => a - b)
+    .map((t) => ({
+      ts: t,
+      days: (t - nowS) / DAY,
+      zeroDte: t - nowS <= DAY,
+      daily: t % WEEK !== FRIDAY_0800,
+      label: new Date(t * 1000).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', timeZone: 'UTC' }).toUpperCase(),
+    }))
 }
-
 /** About a dozen round strikes around spot, inside the contract's 0.5x to 2x band. */
 export function strikesAround(spot: number, n = 6): number[] {
   const raw = spot * 0.025

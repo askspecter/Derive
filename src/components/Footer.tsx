@@ -1,6 +1,7 @@
 import { SmartLink as Link } from './SmartLink'
 import { ROBINHOOD_CHAIN } from '../config/chains'
 import { Logo } from './Logo'
+import { TokenCA } from './TokenCA'
 
 export const X_URL = 'https://x.com/larryexchange_'
 
@@ -26,6 +27,10 @@ export function Footer() {
             <br />
             Derivatives for everyone
           </p>
+          <div className="footer-token">
+            <span className="eyebrow">$LARRY</span>
+            <TokenCA compact />
+          </div>
         </div>
         <div>
           <h4>Trade</h4>

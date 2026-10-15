@@ -78,6 +78,12 @@ export interface ProtocolState {
     protocolFeeBps: number
     markets: (OptionMarket | null)[]
     openNotional: bigint[]
+    /** False on the first options contract, which only lists Friday expiries. */
+    supportsDaily: boolean
+    /** Per asset: daily (0DTE) expiries listed. */
+    daily: boolean[]
+    /** Extra spread on options with under a day left, bps. */
+    shortDatedSpreadBps: number
   }
   /** Latest oracle price per asset symbol, from whichever market lists a feed. */
   prices: Record<string, Price | undefined>
@@ -134,6 +140,9 @@ export function ProtocolProvider({ children }: { children: ReactNode }) {
       ...ASSETS.map((_, i) => ({ address: perps, abi: LarryPerpsAbi, functionName: 'openInterestShort', args: [BigInt(ASSETS[i].id)] }) as const),
       ...ASSETS.map((_, i) => ({ address: options, abi: LarryOptionsAbi, functionName: 'markets', args: [BigInt(ASSETS[i].id)] }) as const),
       ...ASSETS.map((_, i) => ({ address: options, abi: LarryOptionsAbi, functionName: 'openNotional', args: [BigInt(ASSETS[i].id)] }) as const),
+      // Daily expiries only exist from the second options contract on; these fail on the first.
+      { address: options, abi: LarryOptionsAbi, functionName: 'shortDatedSpreadBps' },
+      ...ASSETS.map((_, i) => ({ address: options, abi: LarryOptionsAbi, functionName: 'dailyExpiries', args: [BigInt(ASSETS[i].id)] }) as const),
   ]
   const core = useReadContracts({
     allowFailure: true,
@@ -258,6 +267,9 @@ export function ProtocolProvider({ children }: { children: ReactNode }) {
       protocolFeeBps: Number(r<bigint>(d[18]) ?? 0n),
       markets: optionMarkets,
       openNotional: ASSETS.map((_, i) => r<bigint>(d[19 + 4 * n + i]) ?? 0n),
+      supportsDaily: r<bigint>(d[19 + 5 * n]) != null,
+      daily: ASSETS.map((_, i) => r<boolean>(d[20 + 5 * n + i]) ?? false),
+      shortDatedSpreadBps: Number(r<bigint>(d[19 + 5 * n]) ?? 0n),
     },
     prices,
     refetch: () => {
