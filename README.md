@@ -15,6 +15,9 @@ untuk kripto dan saham tertokenisasi.*
   Prices come from Chainlink, collateral is USDG. `LarryArena` is the Agent Arena registry: it holds no funds.
 - **App** (`src/`): landing page, Perps, Options, Vault, Portfolio, Stats, Docs and an **Admin** page that
   deploys and configures everything from the admin wallet.
+- **Hyperliquid perps** (`/#/hyperliquid`): every Hyperliquid perpetual traded from Larry, powered by Hyperliquid.
+  Orders go straight to the Hyperliquid API with Larry's builder code (`VITE_HL_BUILDER`, `VITE_HL_BUILDER_FEE`);
+  the builder address needs at least 100 USDC in its Hyperliquid perps account to receive fees.
 - **Agent Kit** (`agent-kit/`): MCP server and SDK that let AI agents trade on Larry and join the Agent Arena.
 - **Tests**: 16 contract tests, Agent Kit tests over a real MCP client, and a browser end to end test that drives the real UI.
 

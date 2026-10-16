@@ -9,6 +9,7 @@ import { useProtocol } from '../lib/protocol'
 const NAV = [
   { to: '/options', label: 'Options' },
   { to: '/perps', label: 'Perps' },
+  { to: '/hyperliquid', label: 'Hyperliquid' },
   { to: '/vaults', label: 'Vaults' },
   { to: '/portfolio', label: 'Portfolio' },
   { to: '/arena', label: 'Arena' },

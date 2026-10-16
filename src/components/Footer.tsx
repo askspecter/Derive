@@ -36,6 +36,7 @@ export function Footer() {
           <h4>Trade</h4>
           <Link to="/options">Options</Link>
           <Link to="/perps">Perpetuals</Link>
+          <Link to="/hyperliquid">Hyperliquid perps</Link>
           <Link to="/vaults">Vaults</Link>
           <Link to="/portfolio">Portfolio</Link>
           <Link to="/arena">Agent Arena</Link>

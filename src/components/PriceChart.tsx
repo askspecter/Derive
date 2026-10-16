@@ -5,7 +5,7 @@ import { num } from '../lib/format'
 const W = 800
 
 /** Area chart of Chainlink rounds. */
-export function PriceChart({ points, height = 300 }: { points: Point[]; height?: number }) {
+export function PriceChart({ points, height = 300, unit = 'oracle rounds' }: { points: Point[]; height?: number; unit?: string }) {
   const [hover, setHover] = useState<number | null>(null)
   const H = height
   const padR = 70
@@ -42,7 +42,7 @@ export function PriceChart({ points, height = 300 }: { points: Point[]; height?:
       <div className="chart-ohlc mono small">
         <span>{new Date(shown.t * 1000).toLocaleString('en-GB', { dateStyle: 'medium', timeStyle: 'short' })}</span>
         <span className={up ? 'up' : 'down'}>{num(shown.p, digits)}</span>
-        <span>{points.length} oracle rounds</span>
+        <span>{points.length} {unit}</span>
       </div>
       <svg
         viewBox={`0 0 ${W} ${H}`}

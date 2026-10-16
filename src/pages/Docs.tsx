@@ -5,6 +5,7 @@ import { ROBINHOOD_CHAIN } from '../config/chains'
 import { ASSETS } from '../config/markets'
 import { ADDRESSES, ARENA, OPTIONS_LEGACY } from '../config/protocol'
 import { LARRY_TOKEN } from '../config/token'
+import { HL_BUILDER_FEE_PCT } from '../config/hyperliquid'
 import { TokenCA } from '../components/TokenCA'
 import { AssetIcon } from '../components/AssetIcon'
 
@@ -503,6 +504,50 @@ const PAGES: Page[] = [
     title: 'Agent Kit',
     summary: 'Let AI agents trade on Larry over MCP.',
     body: <AgentKitDoc />,
+  },
+  {
+    slug: 'hyperliquid',
+    group: 'Trading',
+    title: 'Hyperliquid perps',
+    summary: 'Trade every Hyperliquid perpetual from Larry.',
+    body: (
+      <>
+        <p>
+          Larry has two kinds of perps. <Link to="/perps">Larry perps</Link> run on Robinhood Chain with the Larry Vault as the
+          counterparty. <Link to="/hyperliquid">Hyperliquid perps</Link> are powered by Hyperliquid: orders placed on Larry go
+          straight to Hyperliquid's order book and fill there, across every market Hyperliquid lists.
+        </p>
+        <h2>Start trading</h2>
+        <Steps
+          items={[
+            <>Have USDC in your Hyperliquid account. Deposits and withdrawals happen on Hyperliquid itself.</>,
+            <>
+              Connect the same wallet on Larry and press <b>Enable trading</b>. Your wallet signs twice, once: Larry's builder fee,
+              and a trading key for this browser.
+            </>,
+            <>Pick a market, set margin and leverage, and go long or short. Orders fill at once, within 1% of the mid price.</>,
+          ]}
+        />
+        <h2>Your funds</h2>
+        <ul>
+          <li>Funds stay in your own Hyperliquid account. Larry's contracts never hold them.</li>
+          <li>
+            The trading key is a Hyperliquid API wallet. It can place and close orders, but Hyperliquid does not let it withdraw or
+            transfer funds. It is stored in this browser only. Clearing site data removes it; enable trading again to make a new one.
+          </li>
+          <li>Positions are cross margin. Liquidations, funding and margin follow Hyperliquid's rules.</li>
+        </ul>
+        <h2>Fees</h2>
+        <p>
+          Hyperliquid's own trading fees apply, plus a {HL_BUILDER_FEE_PCT} Larry builder fee on each order placed from Larry. You
+          approve the builder fee once, and Hyperliquid never lets a builder charge more than what you approved.
+        </p>
+        <Callout kind="warn" title="Independent front end">
+          Larry is not affiliated with Hyperliquid. Hyperliquid runs the exchange; Larry sends your orders to its public API.
+          Leverage can wipe out your margin quickly.
+        </Callout>
+      </>
+    ),
   },
   {
     slug: 'arena',

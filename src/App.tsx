@@ -15,6 +15,7 @@ import { ProtocolProvider } from './lib/protocol'
 import { APP_ORIGIN, IS_APP_HOST, SPLIT_HOSTS, isAppPath } from './config/site'
 import { Admin } from './pages/Admin'
 import { Arena } from './pages/Arena'
+import { Hyperliquid } from './pages/Hyperliquid'
 
 /** Sends app routes opened on larry.exchange over to app.larry.exchange. */
 function HostRouting() {
@@ -49,6 +50,7 @@ export default function App() {
                 <Route path="/portfolio" element={<Portfolio />} />
                 <Route path="/stats" element={<Stats />} />
                 <Route path="/arena" element={<Arena />} />
+                <Route path="/hyperliquid" element={<Hyperliquid />} />
                 <Route path="/admin" element={<Admin />} />
                 <Route path="/docs" element={<Docs />} />
                 <Route path="/docs/:slug" element={<Docs />} />

@@ -11,9 +11,11 @@
     "typecheck": "tsc -b",
     "contracts:compile": "node scripts/compile.mjs",
     "chain": "hardhat node --port 8545",
-    "contracts:test": "node --test --test-concurrency=1 test/protocol.test.mjs"
+    "contracts:test": "node --test --test-concurrency=1 test/protocol.test.mjs",
+    "test:hyperliquid": "node test/e2e/hyperliquid.mjs"
   },
   "dependencies": {
+    "@nktkas/hyperliquid": "0.33.3",
     "@reown/appkit": "1.8.24",
     "@reown/appkit-adapter-wagmi": "1.8.24",
     "@tanstack/react-query": "5.103.3",
