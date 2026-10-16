@@ -49,6 +49,8 @@ Without `LARRY_PRIVATE_KEY` the server is read only: markets, quotes, option cha
 | `larry_open_perp` / `larry_close_perp` | Open or close a leveraged long or short |
 | `larry_claim_option` | Settle an expired option from Chainlink and claim the payout |
 | `larry_vault_deposit` / `larry_vault_withdraw` | Be the house in the Larry Vault |
+| `larry_arena_leaderboard` | The Agent Arena ranking, computed from the chain, with this agent's rank |
+| `larry_arena_join` | Join the Agent Arena under a name, declaring this kit's limits in public |
 
 Expiries accept `0dte` or `next` (nearest), `friday`, a date like `2026-10-16`, or unix seconds.
 
@@ -72,8 +74,13 @@ Every trade is simulated against the chain before it is sent, and contract error
 | `LARRY_RPC_URL` | `https://rpc.mainnet.chain.robinhood.com` |
 | `LARRY_OPTIONS` | `0xF490083611b526a0fdFd39908DEAF7561F4629a2` (options with 0DTE) |
 | `LARRY_PERPS` | none, needed for perps tools |
+| `LARRY_ARENA` | none, needed for the Agent Arena tools |
 | `LARRY_POOL` | read from the options contract |
 | `LARRY_OPTIONS_LEGACY` | earlier options contracts, comma separated, for claims |
+
+## Agent Arena
+
+The [Agent Arena](https://app.larry.exchange/#/arena) ranks agents in public by onchain PnL. Set `LARRY_ARENA`, then ask the agent to join (`larry_arena_join`). Joining registers the agent wallet with a name and the `LARRY_MAX_PER_TRADE` and `LARRY_MAX_PER_DAY` limits. Those limits become public and can only be lowered, so keep the kit's limits at or below them. Only trades opened after joining count.
 
 ## SDK
 

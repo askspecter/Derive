@@ -11,6 +11,7 @@ const VERSION = '0.1.0'
 const INSTRUCTIONS = `Larry is an onchain derivatives exchange on Robinhood Chain (chain id 4663).
 Products: options (European calls and puts, cash settled in USDG, Friday expiries plus daily 0DTE expiries at 08:00 UTC on some markets), perpetuals (isolated margin, Chainlink prices) and the Larry Vault (LPs earn from every trade).
 Always check larry_markets first, and quote before buying. A bought option can lose at most what was paid for it. Perps can be liquidated.
+The Agent Arena ranks agents in public by their onchain PnL. Only join it (larry_arena_join) when the user asks.
 Trading tools spend real money from the configured agent wallet and are capped by the limits in larry_limits. Tell the user what a trade costs and its maximum loss before placing it.`
 
 const ok = (data: unknown) => ({ content: [{ type: 'text' as const, text: JSON.stringify(data, null, 2) }] })
@@ -62,6 +63,10 @@ export function createServer(larry = new Larry(configFromEnv())) {
   server.registerTool('larry_vault_deposit', { title: 'Deposit into the vault', description: 'Deposits USDG into the Larry Vault for LLP shares. Deposits are locked for the vault lock period.', inputSchema: z.object({ amount: z.number().positive() }), annotations: WRITE }, ({ amount }) => run(() => larry.vaultDeposit(amount)))
 
   server.registerTool('larry_vault_withdraw', { title: 'Withdraw from the vault', description: 'Withdraws USDG from the Larry Vault once the lock has passed. Use "max" for everything that can be withdrawn now.', inputSchema: z.object({ amount: z.union([z.number().positive(), z.literal('max')]) }), annotations: WRITE }, ({ amount }) => run(() => larry.vaultWithdraw(amount)))
+
+  server.registerTool('larry_arena_leaderboard', { title: 'Agent Arena leaderboard', description: 'The Agent Arena: AI agents trading on Larry ranked by PnL computed from the chain, with their declared limits and whether every trade stayed within them. Includes this agent\'s own rank.', inputSchema: z.object({ top: z.number().int().min(1).max(100).optional().describe('How many agents to list, default 10') }), annotations: READ }, ({ top }) => run(() => larry.arenaLeaderboard(top ?? 10)))
+
+  server.registerTool('larry_arena_join', { title: 'Join the Agent Arena', description: 'Registers the agent wallet in the public Agent Arena under a name, declaring the per trade and daily limits this kit enforces. Limits become public and can only be lowered. Costs gas only, no USDG.', inputSchema: z.object({ name: z.string().min(3).max(24).describe('Public agent name, 3 to 24 letters, digits, spaces, dots, dashes or underscores') }), annotations: { readOnlyHint: false, destructiveHint: false, openWorldHint: true } }, ({ name }) => run(() => larry.arenaJoin(name)))
 
   return server
 }

@@ -43,5 +43,7 @@ for (const who of [trader, lp]) await send(infra, usdg, mocks.MockERC20.abi, 'mi
 await send(lp, usdg, mocks.MockERC20.abi, 'approve', [pool, maxUint256])
 await send(lp, pool, app.LarryPool.abi, 'deposit', [parseUnits('5000', 6), lp])
 
-fs.writeFileSync(process.argv[2], JSON.stringify({ admin, trader, lp, usdg, pool, perps, options }, null, 2))
+const arena = await deploy(admin, app.LarryArena, [perps, options])
+
+fs.writeFileSync(process.argv[2], JSON.stringify({ admin, trader, lp, usdg, pool, perps, options, arena }, null, 2))
 console.log('agent kit test chain ready', { pool, perps, options })

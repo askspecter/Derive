@@ -4,12 +4,12 @@ import { waitForTransactionReceipt } from 'wagmi/actions'
 import { erc20Abi, formatUnits, getAddress, getContractAddress, isAddress, parseUnits, zeroAddress, type Address } from 'viem'
 import { robinhood } from '@reown/appkit/networks'
 import { ASSETS } from '../config/markets'
-import { ADDRESSES, ADMIN, DEFAULT_COLLATERAL, OPTIONS_LEGACY } from '../config/protocol'
+import { ADDRESSES, ADMIN, ARENA, DEFAULT_COLLATERAL, OPTIONS_LEGACY } from '../config/protocol'
 import { ROBINHOOD_CHAIN } from '../config/chains'
 import { AssetIcon } from '../components/AssetIcon'
 import { NeedWallet, TxNotice } from '../components/Status'
-import { LarryOptionsAbi, LarryPerpsAbi, LarryPoolAbi, aggregatorAbi } from '../lib/abis'
-import { LarryOptionsBytecode, LarryPerpsBytecode, LarryPoolBytecode } from '../contracts/bytecode'
+import { LarryArenaAbi, LarryOptionsAbi, LarryPerpsAbi, LarryPoolAbi, aggregatorAbi } from '../lib/abis'
+import { LarryArenaBytecode, LarryOptionsBytecode, LarryPerpsBytecode, LarryPoolBytecode } from '../contracts/bytecode'
 import { useProtocol, type OptionMarket, type PerpMarket } from '../lib/protocol'
 import { useTx } from '../lib/tx'
 import { useWallet } from '../lib/wallet'
@@ -118,6 +118,7 @@ export function Admin() {
           {p.live && (
             <>
               <ZeroDteSection deployer={deployer} />
+              <ArenaSection />
               <MarketsSection />
               <ControlsSection />
               <LiquidationsSection />
@@ -827,6 +828,132 @@ function ZeroDteSection({ deployer }: { deployer: Address }) {
           </div>
         </div>
       )}
+    </Section>
+  )
+}
+
+/** Agent Arena: deploy the registry, then pause joining or hide an agent with an abusive name. */
+function ArenaSection() {
+  const tx = useTx()
+  const config = useConfig()
+  const { deployContractAsync } = useDeployContract()
+  const A = ADDRESSES!
+  const storeKey = `larry:arena:${A.options.toLowerCase()}`
+  const [fresh, setFresh] = useState<Address | null>(() => {
+    try {
+      const a = localStorage.getItem(storeKey)
+      return a && isAddress(a) ? getAddress(a) : null
+    } catch {
+      return null
+    }
+  })
+  const [copied, setCopied] = useState(false)
+  const arena = ARENA ?? fresh
+  const q = useReadContracts({
+    allowFailure: true,
+    contracts: [
+      { address: arena ?? zeroAddress, abi: LarryArenaAbi, functionName: 'agentCount' },
+      { address: arena ?? zeroAddress, abi: LarryArenaAbi, functionName: 'joinsPaused' },
+      { address: arena ?? zeroAddress, abi: LarryArenaAbi, functionName: 'agents', args: [0n, 500n] },
+      { address: arena ?? zeroAddress, abi: LarryArenaAbi, functionName: 'options' },
+    ],
+    query: { enabled: !!arena, refetchInterval: 10_000 },
+  })
+  const count = q.data?.[0]?.result as bigint | undefined
+  const paused = q.data?.[1]?.result === true
+  const list = q.data?.[2]?.result as readonly [readonly Address[], readonly { name: string; hidden: boolean }[]] | undefined
+  const arenaOptions = q.data?.[3]?.result as Address | undefined
+  const envLine = `VITE_LARRY_ARENA=${arena ?? ''}`
+
+  return (
+    <Section n="Arena" title="Agent Arena" hint="A public registry of AI agents. It holds no funds and cannot touch trades; the leaderboard is computed from each agent's trades on Larry.">
+      {!arena && (
+        <div className="switch-row">
+          <div>
+            <b>Deploy the arena</b>
+            <div className="muted small">Points at LarryPerps {shortAddr(A.perps)} and LarryOptions {shortAddr(A.options)}.</div>
+          </div>
+          <button
+            className="btn btn-accent btn-sm"
+            disabled={tx.busy}
+            onClick={() =>
+              tx.run('Arena deployed', async () => {
+                tx.setStatus({ kind: 'pending', label: 'Confirm the deployment in your wallet' })
+                const hash = await deployContractAsync({ chainId: robinhood.id, abi: LarryArenaAbi, bytecode: LarryArenaBytecode, args: [A.perps, A.options] })
+                tx.setStatus({ kind: 'pending', label: 'Waiting for the block' })
+                const r = await waitForTransactionReceipt(config, { hash, chainId: robinhood.id })
+                if (!r.contractAddress) throw new Error('No contract address in the receipt')
+                const a = getAddress(r.contractAddress)
+                try {
+                  localStorage.setItem(storeKey, a)
+                } catch {}
+                setFresh(a)
+              })
+            }
+          >
+            Deploy
+          </button>
+        </div>
+      )}
+      {arena && !ARENA && (
+        <div className="callout">
+          <b>Open the arena: point the site at it</b>
+          <div>
+            Set this in Vercel, Settings, Environment Variables, then redeploy. Until then the Arena page says it opens soon.
+            <pre className="code">{envLine}</pre>
+            <button
+              className="btn btn-ghost btn-sm"
+              onClick={async () => {
+                try {
+                  await navigator.clipboard.writeText(envLine)
+                  setCopied(true)
+                  setTimeout(() => setCopied(false), 1500)
+                } catch {}
+              }}
+            >
+              {copied ? 'Copied' : 'Copy'}
+            </button>
+          </div>
+        </div>
+      )}
+      {arena && (
+        <div className="switches">
+          {arenaOptions && arenaOptions.toLowerCase() !== A.options.toLowerCase() && (
+            <div className="notice err">This arena counts options on {shortAddr(arenaOptions)}, not the current options contract. Deploy a new arena to follow it.</div>
+          )}
+          <div className="switch-row">
+            <div>
+              <b>New agents joining</b>
+              <div className="mono small muted">
+                {shortAddr(arena)} · {count === undefined ? '…' : `${count} agents`}
+              </div>
+            </div>
+            <button
+              className={cls('btn btn-sm', paused ? 'btn-ghost' : 'btn-accent')}
+              disabled={tx.busy || count === undefined}
+              onClick={() => tx.run(paused ? 'Joining open' : 'Joining paused', () => tx.write('Arena joins', { address: arena, abi: LarryArenaAbi, functionName: 'setJoinsPaused', args: [!paused] }))}
+            >
+              {paused ? 'Paused, open' : 'Pause joining'}
+            </button>
+          </div>
+          {list?.[0].map((a, i) => (
+            <div className="switch-row" key={a}>
+              <div>
+                <b>{list[1][i].name}</b>
+                <div className="mono small muted">{shortAddr(a)}</div>
+              </div>
+              <button
+                className={cls('btn btn-sm', list[1][i].hidden ? 'btn-accent' : 'btn-ghost')}
+                disabled={tx.busy}
+                onClick={() => tx.run(list[1][i].hidden ? 'Agent shown' : 'Agent hidden', () => tx.write('Arena hide', { address: arena, abi: LarryArenaAbi, functionName: 'setHidden', args: [a, !list[1][i].hidden] }))}
+              >
+                {list[1][i].hidden ? 'Hidden, show' : 'Hide'}
+              </button>
+            </div>
+          ))}
+        </div>
+      )}
+      <TxNotice status={tx.status} />
     </Section>
   )
 }

@@ -12,10 +12,11 @@ untuk kripto dan saham tertokenisasi.*
 
 - **Contracts** (`contracts/`): `LarryPool` (ERC4626 liquidity vault, the counterparty), `LarryPerps`
   (isolated margin perpetuals) and `LarryOptions` (European cash settled options, Black Scholes onchain).
-  Prices come from Chainlink, collateral is USDG.
+  Prices come from Chainlink, collateral is USDG. `LarryArena` is the Agent Arena registry: it holds no funds.
 - **App** (`src/`): landing page, Perps, Options, Vault, Portfolio, Stats, Docs and an **Admin** page that
   deploys and configures everything from the admin wallet.
-- **Tests**: 13 contract tests and a browser end to end test that drives the real UI.
+- **Agent Kit** (`agent-kit/`): MCP server and SDK that let AI agents trade on Larry and join the Agent Arena.
+- **Tests**: 16 contract tests, Agent Kit tests over a real MCP client, and a browser end to end test that drives the real UI.
 
 ## Network
 
@@ -65,6 +66,17 @@ connected to the vault until they are all settled. The admin page then offers to
 
 Options with less than a day left carry an extra spread (`shortDatedSpreadBps`, 3% by default) on top of the
 market spread, set in **Controls**.
+
+### Opening the Agent Arena
+
+The Arena page says "opens soon" until the site knows the arena contract. On `/#/admin`, the **Agent Arena**
+section deploys `LarryArena` pointed at the current perps and options contracts (one signature), then shows
+the line to set in Vercel: `VITE_LARRY_ARENA=<arena address>`. Redeploy and `/#/arena` shows the leaderboard.
+
+Agents join from their own wallet with the Agent Kit (`LARRY_ARENA=<arena address>`, then `larry_arena_join`).
+The leaderboard is computed in the browser from the chain: the agents in the registry, their perps and options
+events since the arena was deployed, and current positions. The admin can pause new joins and hide an agent
+with an abusive name. If options move to a new contract later, deploy a new arena for it.
 
 **The contracts are not audited.** Keep the deposit cap and open interest caps low until they are.
 

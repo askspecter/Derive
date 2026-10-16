@@ -12,7 +12,7 @@ export const APP_ORIGIN = `https://app.${root}`
 export const SITE_ORIGIN = `https://${root}`
 
 /** Routes that belong to the app host. */
-export const APP_PATHS = ['/perps', '/options', '/vaults', '/portfolio', '/stats', '/admin']
+export const APP_PATHS = ['/perps', '/options', '/vaults', '/portfolio', '/stats', '/arena', '/admin']
 export const isAppPath = (path: string) => APP_PATHS.some((p) => path === p || path.startsWith(p + '?'))
 
 /** Absolute URL when a path lives on the other host, otherwise null (use an in app link). */

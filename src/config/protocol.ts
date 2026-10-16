@@ -56,3 +56,6 @@ export const marketIdOf = (symbol: string) => BigInt(ASSETS.find((a) => a.symbol
 
 /** Optional RPC override, used for local testing against a Hardhat node. */
 export const RPC_URL = (env.VITE_RPC_URL as string | undefined) || undefined
+
+/** Agent Arena registry (LarryArena), deployed from the admin page. Until it is set the Arena page shows "opens soon". */
+export const ARENA: Address | null = override(env.VITE_LARRY_ARENA)

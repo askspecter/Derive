@@ -21,7 +21,8 @@ import {
 } from 'viem'
 import { privateKeyToAccount } from 'viem/accounts'
 import { ASSETS, type Asset } from '../../src/config/markets'
-import { LarryOptionsAbi, LarryPerpsAbi, LarryPoolAbi, aggregatorAbi } from '../../src/lib/abis'
+import { LarryArenaAbi, LarryOptionsAbi, LarryPerpsAbi, LarryPoolAbi, aggregatorAbi } from '../../src/lib/abis'
+import { loadArena, readArenaAgents } from '../../src/lib/arenaCore'
 import { strikesAround, validExpiries } from '../../src/lib/expiries'
 
 /** Options contract with daily (0DTE) expiries, live on Robinhood Chain mainnet. */
@@ -38,6 +39,8 @@ export interface LarryConfig {
   options?: Address
   perps?: Address
   pool?: Address
+  /** Agent Arena registry (LarryArena) */
+  arena?: Address
   /** Older options contracts whose options can still be claimed. */
   optionsLegacy?: Address[]
   /** Signs trades. Without it the kit is read only. */
@@ -63,6 +66,7 @@ export function configFromEnv(env: NodeJS.ProcessEnv = process.env): LarryConfig
     options: addr(env.LARRY_OPTIONS) ?? DEFAULT_OPTIONS,
     perps: addr(env.LARRY_PERPS),
     pool: addr(env.LARRY_POOL),
+    arena: addr(env.LARRY_ARENA),
     optionsLegacy: (env.LARRY_OPTIONS_LEGACY ?? '').split(',').map(addr).filter((a): a is Address => !!a),
     privateKey: env.LARRY_PRIVATE_KEY ? ((env.LARRY_PRIVATE_KEY.startsWith('0x') ? env.LARRY_PRIVATE_KEY : `0x${env.LARRY_PRIVATE_KEY}`) as Hex) : undefined,
     maxPerTrade: Number(env.LARRY_MAX_PER_TRADE ?? 100),
@@ -111,6 +115,12 @@ const REVERTS: Record<string, string> = {
   AlreadyExercised: 'Already claimed.',
   ERC4626ExceededMaxDeposit: 'Deposit is above the vault cap.',
   ERC4626ExceededMaxWithdraw: 'Withdrawal is above what is unlocked and free.',
+  AlreadyJoined: 'This wallet is already in the Agent Arena.',
+  NotJoined: 'This wallet has not joined the Agent Arena.',
+  BadName: 'Arena names are 3 to 24 letters, digits, spaces, dots, dashes or underscores, starting and ending with a letter or digit.',
+  NameTaken: 'That arena name is taken. Pick another one.',
+  BadLimits: 'Limits must be above zero, with the daily limit at least the per trade limit.',
+  JoinsPaused: 'Joining the Agent Arena is paused right now.',
 }
 
 function explain(e: unknown): never {
@@ -135,7 +145,7 @@ const num = (v: bigint, decimals: number) => Number(formatUnits(v, decimals))
 const iso = (ts: number | bigint) => new Date(Number(ts) * 1000).toISOString().replace('.000Z', 'Z')
 
 export class Larry {
-  readonly cfg: Required<Omit<LarryConfig, 'perps' | 'pool' | 'privateKey'>> & Pick<LarryConfig, 'perps' | 'pool' | 'privateKey'>
+  readonly cfg: Required<Omit<LarryConfig, 'perps' | 'pool' | 'arena' | 'privateKey'>> & Pick<LarryConfig, 'perps' | 'pool' | 'arena' | 'privateKey'>
   readonly pub
   readonly wallet
   readonly account
@@ -574,5 +584,73 @@ export class Larry {
     if (v === 0n) throw new LarryError('Nothing to withdraw yet (locked or fully reserved).')
     return { withdrawn: num(v, t.decimals), currency: t.symbol, transactions: [await this.send('Withdraw', { address: pool, abi: LarryPoolAbi, functionName: 'withdraw', args: [v, me, me] })] }
   }
-}
 
+  // -------------------------------------------------------------- arena
+
+  private arenaAddress(): Address {
+    if (!this.cfg.arena) throw new LarryError('The Agent Arena address is not set. Set LARRY_ARENA, see larry.exchange/#/docs/arena.')
+    return this.cfg.arena
+  }
+
+  private async arenaSource() {
+    const arena = this.arenaAddress()
+    const [perps, options] = await Promise.all([
+      this.pub.readContract({ address: arena, abi: LarryArenaAbi, functionName: 'perps' }),
+      this.pub.readContract({ address: arena, abi: LarryArenaAbi, functionName: 'options' }),
+    ])
+    return { arena, perps, options, decimals: (await this.token()).decimals }
+  }
+
+  /** The Agent Arena leaderboard, computed from the chain, plus this agent's own entry. */
+  async arenaLeaderboard(top = 10) {
+    const board = await loadArena(this.pub, await this.arenaSource())
+    const me = this.account?.address.toLowerCase()
+    const slim = (e: (typeof board.entries)[number]) => ({
+      rank: e.rank || null,
+      name: e.name,
+      address: e.address,
+      pnl: Number(e.pnl.toFixed(2)),
+      realized: Number(e.realized.toFixed(2)),
+      openPnl: Number(e.unrealized.toFixed(2)),
+      openTrades: e.open,
+      returnPct: Number((e.roi * 100).toFixed(2)),
+      trades: e.trades,
+      wins: e.wins,
+      losses: e.losses,
+      biggestTrade: Number(e.biggestTrade.toFixed(2)),
+      maxPerTrade: e.maxPerTrade,
+      maxPerDay: e.maxPerDay,
+      withinLimits: e.withinLimits,
+      hidden: e.hidden || undefined,
+    })
+    const mine = board.entries.find((e) => e.address.toLowerCase() === me)
+    return {
+      agents: board.entries.filter((e) => !e.hidden).length,
+      joinsPaused: board.joinsPaused,
+      leaderboard: board.entries.filter((e) => !e.hidden).slice(0, top).map(slim),
+      you: mine ? slim(mine) : this.account ? 'This wallet has not joined. Use larry_arena_join.' : 'Read only, no agent wallet.',
+      blocks: { from: board.startBlock.toString(), to: board.toBlock.toString() },
+      leaderboardUrl: 'https://app.larry.exchange/#/arena',
+    }
+  }
+
+  /** Joins the Agent Arena from the agent wallet, declaring the limits this kit enforces. */
+  async arenaJoin(name: string) {
+    if (!this.wallet || !this.account) throw new LarryError('Read only: set LARRY_PRIVATE_KEY to an agent wallet to join the arena.')
+    const arena = this.arenaAddress()
+    const t = await this.token()
+    const { agents } = await readArenaAgents(this.pub, arena, t.decimals)
+    if (agents.some((a) => a.address.toLowerCase() === this.account!.address.toLowerCase())) throw new LarryError(REVERTS.AlreadyJoined)
+    const perTrade = parseUnits(String(this.cfg.maxPerTrade), t.decimals)
+    const perDay = parseUnits(String(this.cfg.maxPerDay), t.decimals)
+    const tx = await this.send('Join the Agent Arena', { address: arena, abi: LarryArenaAbi, functionName: 'join', args: [name.trim(), perTrade, perDay] })
+    return {
+      name: name.trim(),
+      wallet: this.account.address,
+      declaredLimits: { maxPerTrade: this.cfg.maxPerTrade, maxPerDay: this.cfg.maxPerDay, currency: t.symbol },
+      note: 'These limits are public and can only be lowered. Keep LARRY_MAX_PER_TRADE at or below them, or a bigger trade shows as over the limit on the leaderboard.',
+      transactions: [tx],
+      leaderboardUrl: 'https://app.larry.exchange/#/arena',
+    }
+  }
+}

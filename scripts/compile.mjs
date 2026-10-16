@@ -54,6 +54,7 @@ const app = {
   LarryPool: pick('contracts/LarryPool.sol', 'LarryPool'),
   LarryPerps: pick('contracts/LarryPerps.sol', 'LarryPerps'),
   LarryOptions: pick('contracts/LarryOptions.sol', 'LarryOptions'),
+  LarryArena: pick('contracts/LarryArena.sol', 'LarryArena'),
 }
 const mocks = {
   MockERC20: pick('contracts/mocks/MockERC20.sol', 'MockERC20'),

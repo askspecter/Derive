@@ -13,6 +13,8 @@ import {
   formatUnits,
   maxUint256,
   defineChain,
+  keccak256,
+  toHex,
 } from 'viem'
 
 const RPC = process.env.RPC_URL ?? 'http://127.0.0.1:8545'
@@ -27,6 +29,7 @@ const testClient = createTestClient({ chain, mode: 'hardhat', transport: http(RP
 const app = JSON.parse(fs.readFileSync(new URL('../src/contracts/artifacts.json', import.meta.url)))
 const mocks = JSON.parse(fs.readFileSync(new URL('./artifacts/mocks.json', import.meta.url)))
 
+const keccakName = (s) => keccak256(toHex(s))
 const usd = (v) => parseUnits(String(v), 6)
 const wad = (v) => parseUnits(String(v), 18)
 const feedPx = (v) => parseUnits(String(v), 8)
@@ -477,4 +480,55 @@ test('admin: ownership transfer is two step', async () => {
   assert.equal((await P('owner')).toLowerCase(), admin.toLowerCase())
   await send(bob, pool, app.LarryPool.abi, 'acceptOwnership')
   assert.equal((await P('owner')).toLowerCase(), bob.toLowerCase())
+})
+
+// ----------------------------------------------------------------- arena
+
+test('arena: agents join with a unique name and public limits that can only go down', async () => {
+  const arena = await deploy(admin, app.LarryArena, [perps, options])
+  const A = (fn, args) => read(arena, app.LarryArena.abi, fn, args)
+  assert.equal(await A('startBlock'), (await pub.getBlockNumber()))
+  // a position opened before joining is not the agent's arena history
+  await send(alice, perps, app.LarryPerps.abi, 'openPosition', [ETH_MARKET, true, usd(100), usd(500), wad(3010)])
+
+  for (const bad of ['ab', ' Owl', 'Owl ', 'Night_Owl!', 'x'.repeat(25), '-Owl']) {
+    await reverts(send(alice, arena, app.LarryArena.abi, 'join', [bad, usd(50), usd(200)]), 'BadName')
+  }
+  await reverts(send(alice, arena, app.LarryArena.abi, 'join', ['Night Owl', 0n, usd(200)]), 'BadLimits')
+  await reverts(send(alice, arena, app.LarryArena.abi, 'join', ['Night Owl', usd(50), usd(10)]), 'BadLimits')
+  await send(alice, arena, app.LarryArena.abi, 'join', ['Night Owl', usd(50), usd(200)])
+  await reverts(send(alice, arena, app.LarryArena.abi, 'join', ['Owl Two', usd(50), usd(200)]), 'AlreadyJoined')
+  await reverts(send(bob, arena, app.LarryArena.abi, 'join', ['night OWL', usd(50), usd(200)]), 'NameTaken')
+  await send(bob, arena, app.LarryArena.abi, 'join', ['Bob.bot-2_x', usd(20), usd(20)])
+
+  const a = await A('getAgent', [alice])
+  assert.equal(a.name, 'Night Owl')
+  assert.equal(a.firstPerpId, 2n) // the position opened before joining has id 1
+  assert.equal(a.firstOptionId, 1n)
+  assert.equal(a.maxPerTrade, usd(50))
+  assert.equal(await A('agentCount'), 2n)
+  const [addrs, info] = await A('agents', [0n, 10n])
+  assert.deepEqual(addrs.map((x) => x.toLowerCase()), [alice, bob].map((x) => x.toLowerCase()))
+  assert.equal(info[1].name, 'Bob.bot-2_x')
+  assert.equal((await A('agents', [5n, 10n]))[0].length, 0)
+
+  // limits only tighten
+  await reverts(send(alice, arena, app.LarryArena.abi, 'lowerLimits', [usd(60), usd(200)]), 'BadLimits')
+  await reverts(send(alice, arena, app.LarryArena.abi, 'lowerLimits', [usd(50), usd(300)]), 'BadLimits')
+  await send(alice, arena, app.LarryArena.abi, 'lowerLimits', [usd(25), usd(100)])
+  assert.equal((await A('getAgent', [alice])).maxPerDay, usd(100))
+  await reverts(send(keeper, arena, app.LarryArena.abi, 'lowerLimits', [usd(1), usd(1)]), 'NotJoined')
+
+  // renaming frees the old name
+  await send(alice, arena, app.LarryArena.abi, 'rename', ['Owl Prime'])
+  assert.equal((await A('nameHolder', [keccakName('night owl')])).toLowerCase(), '0x0000000000000000000000000000000000000000')
+  await send(keeper, arena, app.LarryArena.abi, 'join', ['Night Owl', usd(5), usd(5)])
+  assert.equal((await A('getAgent', [alice])).name, 'Owl Prime')
+
+  // the owner moderates, nobody else
+  await reverts(send(alice, arena, app.LarryArena.abi, 'setHidden', [bob, true]), 'OwnableUnauthorizedAccount')
+  await send(admin, arena, app.LarryArena.abi, 'setHidden', [bob, true])
+  assert.equal((await A('getAgent', [bob])).hidden, true)
+  await send(admin, arena, app.LarryArena.abi, 'setJoinsPaused', [true])
+  await reverts(send(lp, arena, app.LarryArena.abi, 'join', ['LP Agent', usd(5), usd(5)]), 'JoinsPaused')
 })

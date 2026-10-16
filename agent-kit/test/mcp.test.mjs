@@ -23,7 +23,7 @@ async function connect(extra = {}) {
   const transport = new StdioClientTransport({
     command: process.execPath,
     args: [new URL('../dist/larry-mcp.mjs', import.meta.url).pathname],
-    env: { PATH: process.env.PATH, LARRY_RPC_URL: RPC, LARRY_OPTIONS: env.options, LARRY_PERPS: env.perps, LARRY_STATE_DIR: stateDir, ...extra },
+    env: { PATH: process.env.PATH, LARRY_RPC_URL: RPC, LARRY_OPTIONS: env.options, LARRY_PERPS: env.perps, LARRY_ARENA: env.arena, LARRY_STATE_DIR: stateDir, ...extra },
   })
   const client = new Client({ name: 'larry-test', version: '1.0.0' })
   await client.connect(transport)
@@ -47,7 +47,7 @@ test('lists the Larry tools', async () => {
   const { tools } = await agent.listTools()
   const names = tools.map((t) => t.name).sort()
   assert.deepEqual(names, [
-    'larry_balances', 'larry_buy_option', 'larry_claim_option', 'larry_close_perp', 'larry_expiries', 'larry_limits', 'larry_markets',
+    'larry_arena_join', 'larry_arena_leaderboard', 'larry_balances', 'larry_buy_option', 'larry_claim_option', 'larry_close_perp', 'larry_expiries', 'larry_limits', 'larry_markets',
     'larry_open_perp', 'larry_option_chain', 'larry_positions', 'larry_quote_option', 'larry_vault', 'larry_vault_deposit', 'larry_vault_withdraw',
   ])
   assert.equal(tools.find((t) => t.name === 'larry_markets').annotations.readOnlyHint, true)
@@ -153,4 +153,55 @@ test('settles and claims an expired 0DTE option', async () => {
   const after = (await call(agent, 'larry_positions')).data.options[0]
   assert.equal(after.status, 'claimed')
   assert.equal(after.settlementPrice, 3600)
+})
+
+test('joins the Agent Arena and is ranked from its onchain trades only', async () => {
+  const ro = await connect({})
+  const empty = await call(ro, 'larry_arena_leaderboard')
+  assert.equal(empty.error, false, empty.text)
+  assert.equal(empty.data.agents, 0)
+  assert.match(await call(ro, 'larry_arena_join', { name: 'Night Owl' }).then((r) => r.text), /Read only/)
+  await ro.close()
+
+  // fresh spend state, so the earlier tests' spending does not hit the daily limit
+  const a = await connect({ LARRY_PRIVATE_KEY: TRADER_KEY, LARRY_MAX_PER_TRADE: '100', LARRY_MAX_PER_DAY: '300', LARRY_STATE_DIR: fs.mkdtempSync(path.join(os.tmpdir(), 'larry-d-')) })
+  assert.match((await call(a, 'larry_arena_join', { name: 'Owl!' })).text, /3 to 24/)
+  const j = await call(a, 'larry_arena_join', { name: 'Night Owl' })
+  assert.equal(j.error, false, j.text)
+  assert.deepEqual(j.data.declaredLimits, { maxPerTrade: 100, maxPerDay: 300, currency: 'USDG' })
+  assert.match((await call(a, 'larry_arena_join', { name: 'Owl Two' })).text, /already in the Agent Arena/)
+
+  const before = await call(a, 'larry_arena_leaderboard')
+  assert.equal(before.data.you.rank, 1)
+  assert.equal(before.data.you.trades, 0) // the trades from before joining do not count
+
+  // a winning perp and an open option
+  const [feed] = await pub.readContract({ address: env.options, abi: app.LarryOptions.abi, functionName: 'markets', args: [0n] })
+  const [, , , , , , , , , infra] = await pub.request({ method: 'eth_accounts' })
+  const w = createWalletClient({ account: infra, chain, transport: http(RPC) })
+  const setEth = async (px) => pub.waitForTransactionReceipt({ hash: await w.writeContract({ address: feed, abi: mocks.MockAggregator.abi, functionName: 'setAnswer', args: [parseUnits(String(px), 8)] }) })
+  await setEth(3600)
+  const p = await call(a, 'larry_open_perp', { symbol: 'ETH', side: 'long', collateral: 50, leverage: 5 })
+  assert.equal(p.error, false, p.text)
+  await setEth(3780) // +5%, about +12 USDG on 250 size
+  const live = await call(a, 'larry_arena_leaderboard')
+  assert.ok(live.data.you.openPnl > 10 && live.data.you.openPnl < 13, JSON.stringify(live.data.you))
+  const id = (await call(a, 'larry_positions')).data.perps[0].id
+  assert.equal((await call(a, 'larry_close_perp', { id })).error, false)
+  const o = await call(a, 'larry_buy_option', { symbol: 'ETH', type: 'put', strike: 3700, expiry: 'friday', contracts: 0.05 })
+  assert.equal(o.error, false, o.text)
+
+  const b = await call(a, 'larry_arena_leaderboard')
+  const me = b.data.you
+  assert.equal(me.rank, 1)
+  assert.equal(me.name, 'Night Owl')
+  assert.equal(me.trades, 2)
+  assert.equal(me.wins, 1)
+  assert.equal(me.openTrades, 1)
+  assert.equal(me.openPnl, 0) // the option is open but adds nothing until it settles
+  assert.ok(me.realized > 10 && me.realized < 13, JSON.stringify(me))
+  assert.equal(me.biggestTrade, 50)
+  assert.equal(me.withinLimits, true)
+  assert.deepEqual(b.data.leaderboard.map((x) => x.name), ['Night Owl'])
+  await a.close()
 })

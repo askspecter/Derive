@@ -38,6 +38,7 @@ export function Footer() {
           <Link to="/perps">Perpetuals</Link>
           <Link to="/vaults">Vaults</Link>
           <Link to="/portfolio">Portfolio</Link>
+          <Link to="/arena">Agent Arena</Link>
         </div>
         <div>
           <h4>Learn</h4>
