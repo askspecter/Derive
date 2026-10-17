@@ -219,3 +219,46 @@ test('contract: anyone burns stray LARRY, the owner pauses and withdraws', async
   await send({ address: bb, abi: app.LarryBuyback.abi, functionName: 'withdraw', args: [owner, held] })
   assert.equal(await pub.getBalance({ address: bb }), 0n)
 })
+
+// ------------------------------------------------------------ Uniswap V4
+
+test('contract: buys on a Uniswap V4 ETH pool and the PoolManager pays the dead address', async () => {
+  const v4 = (n) => JSON.parse(fs.readFileSync(path.join(U, `node_modules/@uniswap/v4-core/out/${n}.sol/${n}.json`)))
+  const PM = v4('PoolManager')
+  const pm = await deploy({ abi: PM.abi, bytecode: PM.bytecode.object }, [owner])
+  const key = { currency0: '0x0000000000000000000000000000000000000000', currency1: LARRY, fee: 3000, tickSpacing: 60, hooks: '0x0000000000000000000000000000000000000000' }
+  // 1 ETH = 100M LARRY: sqrtPrice = sqrt(1e8) * 2^96
+  await send({ address: pm, abi: PM.abi, functionName: 'initialize', args: [key, 10_000n * 2n ** 96n] })
+  const LT = v4('PoolModifyLiquidityTest')
+  const lp = await deploy({ abi: LT.abi, bytecode: LT.bytecode.object }, [pm])
+  await send({ address: LARRY, abi: mocks.MockERC20.abi, functionName: 'approve', args: [lp, maxUint256] })
+  await send({ address: lp, abi: LT.abi, functionName: 'modifyLiquidity', args: [key, { tickLower: -887220, tickUpper: 887220, liquidityDelta: 10n ** 22n, salt: '0x' + '0'.repeat(64) }, '0x'], value: parseEther('1.1') })
+
+  const v4bb = await deploy(app.LarryBuyback, [LARRY, BOT, parseEther('0.001'), parseEther('0.01')])
+  await pub.waitForTransactionReceipt({ hash: await w.sendTransaction({ to: v4bb, value: parseEther('0.005') }) })
+  await reverts(send({ address: v4bb, abi: app.LarryBuyback.abi, functionName: 'setV4Pool', args: [pm, { ...key, currency1: usdg }] }), 'BadParams')
+  await send({ address: v4bb, abi: app.LarryBuyback.abi, functionName: 'setV4Pool', args: [pm, key] })
+  // the callback only runs inside the contract's own unlock
+  await reverts(pub.simulateContract({ account: BOT, address: v4bb, abi: app.LarryBuyback.abi, functionName: 'unlockCallback', args: ['0x'] }), 'NotKeeper')
+
+  const before = await dead()
+  const { out, state } = await run({ BUYBACK_CONTRACT: v4bb, BUYBACK_ROUTE: 'v4', BUYBACK_AMOUNT: '0.0001', BUYBACK_MAX_RUNS: '3' })
+  assert.equal((out.match(/bought and burned/g) ?? []).length, 3, out)
+  const burned = (await dead()) - before
+  assert.ok(burned > 29000 && burned < 30000, `burned ${burned}`) // 0.0003 ETH at 100M LARRY per ETH, minus the 0.3% fee
+  assert.equal(await pub.readContract({ address: v4bb, abi: app.LarryBuyback.abi, functionName: 'buys' }), 3n)
+  assert.equal(await pub.getBalance({ address: v4bb }), parseEther('0.0047'))
+  assert.equal(await pub.readContract({ address: LARRY, abi: mocks.MockERC20.abi, functionName: 'balanceOf', args: [v4bb] }), 0n)
+  assert.equal(state.buys, 3)
+
+  // detect reads the pool key from a swap transaction
+  const hash = out.match(/tx\/(0x[0-9a-f]{64})/)[1]
+  const { stdout } = await sh(process.execPath, [bot, 'detect', hash], { env: { PATH: process.env.PATH, BUYBACK_RPC_URL: RPC } })
+  assert.match(stdout, new RegExp(`Uniswap V4 PoolManager: ${pm}`, 'i'))
+  assert.match(stdout, /currency0 0x0{40} \(ETH\)/)
+  assert.match(stdout, /fee 3000, tickSpacing 60, hooks 0x0{40}/)
+
+  // a minimum above what the pool gives reverts
+  await reverts(pub.simulateContract({ account: BOT, address: v4bb, abi: app.LarryBuyback.abi, functionName: 'buyAndBurnV4', args: [parseEther('0.0001'), parseUnits('20000', 18)] }), 'TooLittleOut')
+  await reverts(pub.simulateContract({ account: BOT, address: v4bb, abi: app.LarryBuyback.abi, functionName: 'buyAndBurnV4', args: [parseEther('0.002'), 0n] }), 'OverLimit')
+})

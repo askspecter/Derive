@@ -993,15 +993,24 @@ function BuybackSection() {
       { ...c, functionName: 'paused' },
       { ...c, functionName: 'buys' },
       { ...c, functionName: 'totalBurned' },
+      { ...c, functionName: 'poolManager' },
+      { ...c, functionName: 'v4Pool' },
     ],
     query: { enabled: !!bb, refetchInterval: 8000 },
   })
+  const [pm, setPm] = useState('')
+  const [fee, setFee] = useState('3000')
+  const [spacing, setSpacing] = useState('60')
+  const [hooks, setHooks] = useState('0x0000000000000000000000000000000000000000')
   const bal = useReadContracts({
     allowFailure: true,
     contracts: [{ ...c, functionName: 'allowedTarget', args: [isAddress(target) ? getAddress(target) : zeroAddress] }],
     query: { enabled: !!bb && isAddress(target) },
   })
-  const [k, mb, md, left, paused, buys, burned] = (q.data ?? []).map((r) => r.result) as [Address?, bigint?, bigint?, bigint?, boolean?, bigint?, bigint?]
+  const [k, mb, md, left, paused, buys, burned, curPm, curPool] = (q.data ?? []).map((r) => r.result) as [
+    Address?, bigint?, bigint?, bigint?, boolean?, bigint?, bigint?, Address?, (readonly [Address, Address, number, number, Address] | undefined)?,
+  ]
+  const v4Set = !!curPm && curPm !== zeroAddress
   const targetAllowed = bal.data?.[0]?.result === true
   const envLine = `VITE_LARRY_BUYBACK=${bb ?? ''}`
   const num6 = (v?: bigint) => (v === undefined ? '…' : Number(formatEther(v)).toFixed(6))
@@ -1084,7 +1093,39 @@ function BuybackSection() {
           </button>
         </div>
         <div className="switch-row">
-          <Field label="Allow a swap route" suffix="the target the bot's check command prints" value={target} onChange={setTarget} wide />
+          <div>
+            <b>Uniswap V4 pool</b>
+            <div className="muted small">
+              {v4Set && curPool
+                ? `Buying on PoolManager ${shortAddr(curPm!)}, fee ${curPool[2]}, tick spacing ${curPool[3]}, hooks ${shortAddr(curPool[4])}.`
+                : 'Where $LARRY trades. The bot\'s detect command prints these values from any $LARRY buy.'}
+            </div>
+            <div className="form-grid">
+              <Field label="PoolManager" value={pm} onChange={setPm} wide />
+              <Field label="Fee" value={fee} onChange={setFee} />
+              <Field label="Tick spacing" value={spacing} onChange={setSpacing} />
+              <Field label="Hooks" value={hooks} onChange={setHooks} wide />
+            </div>
+          </div>
+          <button
+            className="btn btn-accent btn-sm"
+            disabled={tx.busy || !isAddress(pm) || !isAddress(hooks) || !/^\d+$/.test(fee) || !/^-?\d+$/.test(spacing)}
+            onClick={() =>
+              tx.run('V4 pool set', () =>
+                tx.write('Set V4 pool', {
+                  address: bb,
+                  abi: LarryBuybackAbi,
+                  functionName: 'setV4Pool',
+                  args: [getAddress(pm), { currency0: zeroAddress, currency1: LARRY_TOKEN.address, fee: Number(fee), tickSpacing: Number(spacing), hooks: getAddress(hooks) }],
+                }),
+              )
+            }
+          >
+            {v4Set ? 'Update pool' : 'Set pool'}
+          </button>
+        </div>
+        <div className="switch-row">
+          <Field label="Allow a swap route" suffix="only for the 0x or router routes, not V4" value={target} onChange={setTarget} wide />
           <button
             className="btn btn-accent btn-sm"
             disabled={tx.busy || !isAddress(target) || targetAllowed}

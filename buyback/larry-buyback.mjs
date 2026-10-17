@@ -29,6 +29,8 @@ import {
   isAddress,
   maxUint256,
   parseAbi,
+  parseAbiItem,
+  toEventSelector,
   parseEther,
   parseUnits,
   zeroAddress,
@@ -59,7 +61,7 @@ const cfg = {
   key: env.BUYBACK_PRIVATE_KEY,
   larry: addr(env.LARRY_TOKEN, 'LARRY_TOKEN', '0x72587018a341d5B668C0479e73b2Ee1c8D06f4f4'),
   contract: addr(env.BUYBACK_CONTRACT, 'BUYBACK_CONTRACT'),
-  dex: (env.BUYBACK_ROUTE || env.BUYBACK_DEX || (env.BUYBACK_CONTRACT ? '0x' : 'v2')).toLowerCase(), // 0x, v2 or v3
+  dex: (env.BUYBACK_ROUTE || env.BUYBACK_DEX || (env.BUYBACK_CONTRACT ? 'v4' : 'v2')).toLowerCase(), // v4, 0x, v2 or v3
   zeroxKey: env.BUYBACK_0X_API_KEY,
   zeroxUrl: env.BUYBACK_0X_URL || 'https://api.0x.org',
   router: addr(env.BUYBACK_ROUTER, 'BUYBACK_ROUTER'),
@@ -108,6 +110,9 @@ const V3_QUOTER = parseAbi([
 
 const BUYBACK = parseAbi([
   'function buyAndBurn(address target, bytes data, uint256 value, uint256 minOut)',
+  'function buyAndBurnV4(uint256 value, uint256 minOut) returns (uint256 burned)',
+  'function poolManager() view returns (address)',
+  'function v4Pool() view returns (address currency0, address currency1, uint24 fee, int24 tickSpacing, address hooks)',
   'function leftToday() view returns (uint256)',
   'function maxPerBuy() view returns (uint256)',
   'function keeper() view returns (address)',
@@ -126,15 +131,20 @@ const log = (...a) => console.log(new Date().toISOString().replace('T', ' ').sli
 let meta
 async function loadMeta() {
   if (meta) return meta
-  if (!['0x', 'v2', 'v3'].includes(cfg.dex)) throw new Error('BUYBACK_ROUTE must be 0x, v2 or v3')
+  if (!['v4', '0x', 'v2', 'v3'].includes(cfg.dex)) throw new Error('BUYBACK_ROUTE must be v4, 0x, v2 or v3')
+  if (cfg.dex === 'v4') {
+    if (!cfg.contract) throw new Error('The v4 route needs BUYBACK_CONTRACT (the LarryBuyback contract).')
+    const pm = await pub.readContract({ address: cfg.contract, abi: BUYBACK, functionName: 'poolManager' })
+    if (pm === zeroAddress) throw new Error('The buyback contract has no Uniswap V4 pool yet: set it on the admin page (run "detect <txhash>" to get the values).')
+  }
   if (cfg.dex === '0x') {
     if (!cfg.contract) throw new Error('The 0x route needs BUYBACK_CONTRACT (the LarryBuyback contract).')
     if (!cfg.zeroxKey) throw new Error('Set BUYBACK_0X_API_KEY (free at dashboard.0x.org).')
   }
   if (cfg.contract && cfg.pay !== 'eth') throw new Error('The LarryBuyback contract spends ETH: set BUYBACK_PAY=eth.')
-  if (cfg.dex !== '0x' && !cfg.router) throw new Error('Set BUYBACK_ROUTER to the DEX router address, or use BUYBACK_ROUTE=0x with a contract.')
+  if (cfg.dex !== '0x' && cfg.dex !== 'v4' && !cfg.router) throw new Error('Set BUYBACK_ROUTER to the DEX router address, or use BUYBACK_ROUTE=0x with a contract.')
   if (cfg.dex === 'v3' && !cfg.quoter) throw new Error('Set BUYBACK_QUOTER (the DEX QuoterV2) for v3')
-  const weth = cfg.dex === '0x' ? NATIVE : await pub.readContract({ address: cfg.router, abi: cfg.dex === 'v2' ? V2 : V3_ROUTER, functionName: cfg.dex === 'v2' ? 'WETH' : 'WETH9' })
+  const weth = cfg.dex === '0x' || cfg.dex === 'v4' ? NATIVE : await pub.readContract({ address: cfg.router, abi: cfg.dex === 'v2' ? V2 : V3_ROUTER, functionName: cfg.dex === 'v2' ? 'WETH' : 'WETH9' })
   const payToken = cfg.pay === 'eth' ? weth : cfg.pay
   const payDecimals = cfg.pay === 'eth' ? 18 : await pub.readContract({ address: payToken, abi: erc20Abi, functionName: 'decimals' })
   const paySymbol = cfg.pay === 'eth' ? 'ETH' : await pub.readContract({ address: payToken, abi: erc20Abi, functionName: 'symbol' })
@@ -158,7 +168,14 @@ async function zeroxQuote(amountIn) {
   return { target: getAddress(j.transaction.to), data: j.transaction.data, value: BigInt(j.transaction.value ?? amountIn), out: BigInt(j.buyAmount), minOut: BigInt(j.minBuyAmount) }
 }
 
-async function quote(amountIn) {
+/** Live V4 quote: simulate the buy itself with no minimum. */
+async function v4Quote(amountIn, account) {
+  const { result } = await pub.simulateContract({ account: account ?? (await pub.readContract({ address: cfg.contract, abi: BUYBACK, functionName: 'keeper' })), address: cfg.contract, abi: BUYBACK, functionName: 'buyAndBurnV4', args: [amountIn, 0n] })
+  return result
+}
+
+async function quote(amountIn, account) {
+  if (cfg.dex === 'v4') return v4Quote(amountIn, account)
   if (cfg.dex === '0x') return (await zeroxQuote(amountIn)).out
   if (cfg.dex === 'v2') {
     const amounts = await pub.readContract({ address: cfg.router, abi: V2, functionName: 'getAmountsOut', args: [amountIn, meta.route] })
@@ -208,6 +225,12 @@ async function check() {
     ])
     console.log('Contract   ', cfg.contract, `${formatEther(held)} ETH, ${formatEther(left)} ETH left today, max ${formatEther(perBuy)} a buy, keeper ${keeper}${paused ? ', PAUSED' : ''}`)
     console.log('Burned     ', `${fmtLarry(burned)} in ${buys} buys so far`)
+    if (cfg.dex === 'v4') {
+      const pm = await pub.readContract({ address: cfg.contract, abi: BUYBACK, functionName: 'poolManager' })
+      const k = await pub.readContract({ address: cfg.contract, abi: BUYBACK, functionName: 'v4Pool' })
+      console.log('V4 pool    ', `PoolManager ${pm}, fee ${k[2]}, tickSpacing ${k[3]}, hooks ${k[4]}`)
+      return
+    }
     const target = cfg.dex === '0x' ? (await zeroxQuote(toPay(cfg.perBuy))).target : cfg.router
     const ok = await pub.readContract({ address: cfg.contract, abi: BUYBACK, functionName: 'allowedTarget', args: [target] })
     console.log('Target     ', target, ok ? 'allowed' : 'NOT ALLOWED: the owner must call setTarget(target, true)')
@@ -231,6 +254,34 @@ async function detect(hash) {
   const r = await pub.getTransactionReceipt({ hash })
   const V2_SWAP = '0xd78ad95fa46c994b6551d0da85fc275fe613ce37657fb8d5e3d130840159d822'
   const V3_SWAP = '0xc42079f94a6350d7e6235f29174924f928cc2ac818eb64fed8004e115fbcca67'
+  const v4Swap = parseAbiItem('event Swap(bytes32 indexed id, address indexed sender, int128 amount0, int128 amount1, uint160 sqrtPriceX96, uint128 liquidity, int24 tick, uint24 fee)')
+  const v4Init = parseAbiItem('event Initialize(bytes32 indexed id, address indexed currency0, address indexed currency1, uint24 fee, int24 tickSpacing, address hooks, uint160 sqrtPriceX96, int24 tick)')
+  const V4_SWAP = toEventSelector(v4Swap)
+  for (const l of r.logs.filter((x) => x.topics[0] === V4_SWAP)) {
+    const id = l.topics[1]
+    console.log('Uniswap V4 PoolManager:', l.address, 'pool id', id, '-> use BUYBACK_ROUTE=v4')
+    const latest = await pub.getBlockNumber()
+    const find = async (from, to) => {
+      try {
+        return await pub.getLogs({ address: l.address, event: v4Init, args: { id }, fromBlock: from, toBlock: to })
+      } catch (e) {
+        if (to - from < 10_000n) throw e
+        const mid = from + (to - from) / 2n
+        const a = await find(from, mid)
+        return a.length ? a : find(mid + 1n, to)
+      }
+    }
+    const [init] = await find(0n, latest)
+    if (!init) {
+      console.log('  could not find the pool Initialize event; read the pool key from the explorer instead')
+      continue
+    }
+    const k = init.args
+    console.log(`  currency0 ${k.currency0}${k.currency0 === zeroAddress ? ' (ETH)' : ''}`)
+    console.log(`  currency1 ${k.currency1}`)
+    console.log(`  fee ${k.fee}, tickSpacing ${k.tickSpacing}, hooks ${k.hooks}`)
+    console.log('Enter these on the admin page under "Uniswap V4 pool": PoolManager, fee, tick spacing and hooks.')
+  }
   console.log('Sent to (router or aggregator):', tx.to)
   for (const l of r.logs) {
     if (l.topics[0] === V2_SWAP) console.log('Uniswap V2 style pool:', l.address, '-> use BUYBACK_DEX=v2')
@@ -336,6 +387,13 @@ async function run() {
 
 /** One buy through the LarryBuyback contract: it swaps its own ETH and burns everything it receives. */
 async function contractBuy(account, wallet, amountIn, s, spent) {
+  if (cfg.dex === 'v4') {
+    const out = await v4Quote(amountIn, account)
+    const minOut = (out * (10_000n - cfg.slippageBps)) / 10_000n
+    const { request } = await pub.simulateContract({ account, address: cfg.contract, abi: BUYBACK, functionName: 'buyAndBurnV4', args: [amountIn, minOut] })
+    if (cfg.dryRun) return log(`dry run: ${fmtPay(amountIn)} would buy and burn about ${fmtLarry(out)}`)
+    return sendAndRecord(wallet, request, out, amountIn, s, spent)
+  }
   let target, data, value, out, minOut
   if (cfg.dex === '0x') ({ target, data, value, out, minOut } = await zeroxQuote(amountIn))
   else {
@@ -350,6 +408,10 @@ async function contractBuy(account, wallet, amountIn, s, spent) {
   if (!allowed) throw new Error(`${target} is not an allowed target on the buyback contract; the owner must allow it (setTarget)`)
   const { request } = await pub.simulateContract({ account, address: cfg.contract, abi: BUYBACK, functionName: 'buyAndBurn', args: [target, data, value, minOut] })
   if (cfg.dryRun) return log(`dry run: ${fmtPay(value)} would buy and burn about ${fmtLarry(out)}`)
+  return sendAndRecord(wallet, request, out, value, s, spent)
+}
+
+async function sendAndRecord(wallet, request, out, value, s, spent) {
   const hash = await wallet.writeContract(request)
   const rcpt = await pub.waitForTransactionReceipt({ hash })
   if (rcpt.status !== 'success') throw new Error(`buy reverted ${hash}`)
