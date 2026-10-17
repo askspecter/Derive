@@ -18,3 +18,7 @@ export const LARRY_INITIAL_SUPPLY = Number(import.meta.env.VITE_LARRY_INITIAL_SU
 /** LarryBuyback contract that buys and burns $LARRY (deployed from the admin page), shown on the burn page. */
 const bb = (import.meta.env.VITE_LARRY_BUYBACK as string | undefined) ?? ''
 export const BUYBACK_CONTRACT = /^0x[0-9a-fA-F]{40}$/.test(bb) ? getAddress(bb) : null
+
+/** Pons V2 pool where $LARRY trades: buy(ethIn, minOut, to) with native ETH. Checked onchain: token() is $LARRY. */
+const pp = (import.meta.env.VITE_LARRY_POOL as string | undefined) ?? ''
+export const LARRY_POOL = getAddress(/^0x[0-9a-fA-F]{40}$/.test(pp) ? pp : '0x4d17d7ea9f4975738d088e7ec6c15062a6215f16')

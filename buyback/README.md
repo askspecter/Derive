@@ -18,7 +18,9 @@ Two parts:
 
 On `app.larry.exchange/#/admin`, section *$LARRY buyback and burn*:
 
-1. **Uniswap V4 pool**: paste the hash of any $LARRY buy into *Find it from a $LARRY buy*, press Find, then Set pool.
+1. **$LARRY pool**: press *Allow the pool*. $LARRY trades on its Pons V2 pool `0x4d17d7ea9f4975738d088e7ec6c15062a6215f16`
+   (`buy(ethIn, minOut, to)` with native ETH); the contract buys there through `buyAndBurn` and burns all it receives.
+   (A Uniswap V4 pool can be set under *Advanced* instead.)
 2. **Run buybacks from this browser**: create a keeper key, then *Make this browser the keeper* (one transaction to
    set it, one to send it 0.001 ETH for gas).
 3. Set the interval and the ETH per buy, and press **Start buybacks**. Every buy shows in the log with its
@@ -72,6 +74,10 @@ The bot can also swap from its own wallet straight to the dead address on a V2 o
 find which pool it used.
 
 ## Tests
+
+`buyback/test/fork.mjs` runs the website's keeper code against a fork of Robinhood Chain mainnet: the real $LARRY
+and its real Pons pool (start `npx hardhat node --port 8546 --fork https://rpc.mainnet.chain.robinhood.com` first).
+
 
 `buyback/test/buyback.test.mjs` runs the contract and the bot against real Uniswap V2 and V3 contracts on a local
 chain, including the 0x route against a mock 0x API: caps, minimum output, allowed targets, pause, withdraw.

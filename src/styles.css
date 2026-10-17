@@ -640,3 +640,6 @@ button.link { background: none; border: 0; padding: 0; cursor: pointer; }
 .keeper { margin-top: 16px; display: grid; gap: 12px; background: var(--bg-2); }
 .keeper-head { display: flex; justify-content: space-between; align-items: flex-start; gap: 12px; }
 .keeper-log { display: grid; gap: 4px; max-height: 260px; overflow-y: auto; }
+.advanced { border-top: 1px solid var(--border); padding-top: 10px; }
+.advanced summary { cursor: pointer; padding: 6px 0; }
+.advanced[open] > .switch-row { margin-top: 10px; }

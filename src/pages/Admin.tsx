@@ -11,7 +11,7 @@ import { NeedWallet, TxNotice } from '../components/Status'
 import { LarryArenaAbi, LarryBuybackAbi, LarryOptionsAbi, LarryPerpsAbi, LarryPoolAbi, aggregatorAbi } from '../lib/abis'
 import { LarryArenaBytecode, LarryBuybackBytecode, LarryOptionsBytecode, LarryPerpsBytecode, LarryPoolBytecode } from '../contracts/bytecode'
 import { useProtocol, type OptionMarket, type PerpMarket } from '../lib/protocol'
-import { BUYBACK_CONTRACT, LARRY_TOKEN } from '../config/token'
+import { BUYBACK_CONTRACT, LARRY_POOL, LARRY_TOKEN } from '../config/token'
 import { findV4Pool, keeperKey, useBrowserKeeper } from '../lib/buybackKeeper'
 import { privateKeyToAccount } from 'viem/accounts'
 import { usePublicClient } from 'wagmi'
@@ -998,6 +998,7 @@ function BuybackSection() {
       { ...c, functionName: 'totalBurned' },
       { ...c, functionName: 'poolManager' },
       { ...c, functionName: 'v4Pool' },
+      { ...c, functionName: 'allowedTarget', args: [LARRY_POOL] },
     ],
     query: { enabled: !!bb, refetchInterval: 8000 },
   })
@@ -1010,8 +1011,8 @@ function BuybackSection() {
     contracts: [{ ...c, functionName: 'allowedTarget', args: [isAddress(target) ? getAddress(target) : zeroAddress] }],
     query: { enabled: !!bb && isAddress(target) },
   })
-  const [k, mb, md, left, paused, buys, burned, curPm, curPool] = (q.data ?? []).map((r) => r.result) as [
-    Address?, bigint?, bigint?, bigint?, boolean?, bigint?, bigint?, Address?, (readonly [Address, Address, number, number, Address] | undefined)?,
+  const [k, mb, md, left, paused, buys, burned, curPm, curPool, poolAllowed] = (q.data ?? []).map((r) => r.result) as [
+    Address?, bigint?, bigint?, bigint?, boolean?, bigint?, bigint?, Address?, (readonly [Address, Address, number, number, Address] | undefined)?, boolean?,
   ]
   const v4Set = !!curPm && curPm !== zeroAddress
   const targetAllowed = bal.data?.[0]?.result === true
@@ -1097,6 +1098,23 @@ function BuybackSection() {
         </div>
         <div className="switch-row">
           <div>
+            <b>$LARRY pool</b>
+            <div className="muted small">
+              Pons pool {shortAddr(LARRY_POOL)}, where $LARRY trades. {poolAllowed ? 'Allowed: the keeper buys here.' : 'Allow it once so the contract can buy there.'}
+            </div>
+          </div>
+          <button
+            className="btn btn-accent btn-sm"
+            disabled={tx.busy || poolAllowed !== false}
+            onClick={() => tx.run('$LARRY pool allowed', () => tx.write('Allow the $LARRY pool', { address: bb, abi: LarryBuybackAbi, functionName: 'setTarget', args: [LARRY_POOL, true] }))}
+          >
+            {poolAllowed ? 'Allowed' : 'Allow the pool'}
+          </button>
+        </div>
+        <details className="advanced">
+          <summary className="muted small">Advanced: Uniswap V4 pool and other routes</summary>
+        <div className="switch-row">
+          <div>
             <b>Uniswap V4 pool</b>
             <div className="muted small">
               {v4Set && curPool
@@ -1145,6 +1163,7 @@ function BuybackSection() {
             {targetAllowed ? 'Allowed' : 'Allow'}
           </button>
         </div>
+        </details>
         <div className="switch-row">
           <div className="form-grid">
             <Field label="Max per buy" suffix={`ETH, now ${num6(mb)}`} value={perBuy} onChange={setPerBuy} />
@@ -1175,7 +1194,7 @@ function BuybackSection() {
           </div>
         </div>
       </div>
-      <BrowserKeeper bb={bb} keeper={k} v4Set={v4Set} />
+      <BrowserKeeper bb={bb} keeper={k} route={poolAllowed ? 'pons' : v4Set ? 'v4' : null} />
       {!BUYBACK_CONTRACT && (
         <div className="callout">
           <b>Show it on the burn page</b>
@@ -1237,7 +1256,7 @@ function FindPool({ onFound }: { onFound: (f: Awaited<ReturnType<typeof findV4Po
 }
 
 /** Runs the buybacks from this browser tab, so no server is needed. */
-function BrowserKeeper({ bb, keeper, v4Set }: { bb: Address; keeper?: Address; v4Set: boolean }) {
+function BrowserKeeper({ bb, keeper, route }: { bb: Address; keeper?: Address; route: 'pons' | 'v4' | null }) {
   const tx = useTx()
   const config = useConfig()
   const { sendTransactionAsync } = useSendTransaction()
@@ -1247,7 +1266,7 @@ function BrowserKeeper({ bb, keeper, v4Set }: { bb: Address; keeper?: Address; v
   const k = useBrowserKeeper(bb)
   const [every, setEvery] = useState('10')
   const [amount, setAmount] = useState('0.00001')
-  k.settings.current = { ...k.settings.current, everySec: Math.max(3, Number(every) || 10), amountEth: amount }
+  k.settings.current = { ...k.settings.current, route: route ?? 'pons', everySec: Math.max(3, Number(every) || 10), amountEth: amount }
 
   return (
     <div className="keeper card">
@@ -1292,8 +1311,8 @@ function BrowserKeeper({ bb, keeper, v4Set }: { bb: Address; keeper?: Address; v
             </div>
           )}
           {isKeeper && (
-            <button className={cls('btn btn-sm', k.running ? 'btn-ghost' : 'btn-accent')} disabled={!v4Set} onClick={() => k.setRunning(!k.running)}>
-              {!v4Set ? 'Set the V4 pool first' : k.running ? 'Stop' : 'Start buybacks'}
+            <button className={cls('btn btn-sm', k.running ? 'btn-ghost' : 'btn-accent')} disabled={!route} onClick={() => k.setRunning(!k.running)}>
+              {!route ? 'Allow the $LARRY pool first' : k.running ? 'Stop' : 'Start buybacks'}
             </button>
           )}
           {k.stats.buys > 0 && (
