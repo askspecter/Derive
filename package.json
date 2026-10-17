@@ -12,7 +12,8 @@
     "contracts:compile": "node scripts/compile.mjs",
     "chain": "hardhat node --port 8545",
     "contracts:test": "node --test --test-concurrency=1 test/protocol.test.mjs",
-    "test:hyperliquid": "node test/e2e/hyperliquid.mjs"
+    "test:hyperliquid": "node test/e2e/hyperliquid.mjs",
+    "test:burn": "node test/e2e/burn.mjs"
   },
   "dependencies": {
     "@nktkas/hyperliquid": "0.33.3",

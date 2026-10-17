@@ -2,6 +2,7 @@ import { SmartLink as Link } from '../components/SmartLink'
 import { ASSETS } from '../config/markets'
 import { AssetIcon } from '../components/AssetIcon'
 import { TokenCA } from '../components/TokenCA'
+import { BurnTracker } from '../components/BurnTracker'
 import { Sparkline } from '../components/Sparkline'
 import { useFeedHistory } from '../lib/history'
 import { useProtocol } from '../lib/protocol'
@@ -303,6 +304,7 @@ export function Home() {
           </div>
           <TokenCA />
         </div>
+        <BurnTracker compact />
       </section>
 
       <section className="section container">

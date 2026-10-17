@@ -5,3 +5,12 @@ export const LARRY_TOKEN = {
   symbol: 'LARRY',
   address: getAddress('0x72587018a341d5b668c0479e73b2ee1c8d06f4f4'),
 } as const
+
+/** Addresses that tokens are sent to when burned. Nobody holds their keys. */
+export const BURN_ADDRESSES = [getAddress('0x000000000000000000000000000000000000dEaD'), getAddress('0x0000000000000000000000000000000000000000')] as const
+
+/**
+ * Supply at launch, in whole tokens, if $LARRY was ever burned with burn() (which lowers totalSupply)
+ * instead of a transfer to the dead address. Leave unset when every burn went to the dead address.
+ */
+export const LARRY_INITIAL_SUPPLY = Number(import.meta.env.VITE_LARRY_INITIAL_SUPPLY ?? 0) || 0

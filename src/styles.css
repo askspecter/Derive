@@ -599,3 +599,37 @@ button.link { background: none; border: 0; padding: 0; cursor: pointer; }
   .hl-markets { position: static; }
   .hl-list { max-height: 220px; grid-template-columns: repeat(2, minmax(0, 1fr)); }
 }
+
+/* $LARRY burn tracker */
+.burn { display: grid; grid-template-columns: minmax(0, 1.1fr) minmax(0, 1fr); gap: 16px; align-items: start; }
+.section .burn { margin-top: 16px; }
+.burn-hero { position: relative; overflow: hidden; padding: clamp(22px, 4vw, 36px); background: radial-gradient(ellipse 80% 70% at 50% 120%, rgba(14, 143, 95, .45), transparent 70%), var(--card); }
+.burn-embers { position: absolute; inset: 0; pointer-events: none; background-image: radial-gradient(2px 2px at 20% 80%, rgba(91, 252, 192, .7), transparent), radial-gradient(2px 2px at 45% 90%, rgba(91, 252, 192, .5), transparent), radial-gradient(1.5px 1.5px at 70% 85%, rgba(255, 255, 255, .6), transparent), radial-gradient(2px 2px at 85% 95%, rgba(91, 252, 192, .6), transparent), radial-gradient(1.5px 1.5px at 30% 100%, rgba(255, 255, 255, .5), transparent); background-size: 100% 100%; animation: embers 6s linear infinite; opacity: .8; }
+@keyframes embers { from { transform: translateY(0); opacity: .9; } to { transform: translateY(-60%); opacity: 0; } }
+.burn-top { position: relative; display: flex; justify-content: space-between; align-items: center; }
+.burn-live { display: inline-flex; align-items: center; gap: 8px; font-family: var(--mono); font-size: 12px; letter-spacing: .2em; }
+.burn-live i { width: 9px; height: 9px; border-radius: 50%; background: var(--accent); box-shadow: 0 0 12px var(--accent); animation: pulse 1.6s ease-in-out infinite; }
+@keyframes pulse { 50% { opacity: .35; } }
+.burn-count { position: relative; margin-top: 18px; font-size: clamp(40px, 7vw, 76px); line-height: 1; letter-spacing: -.02em; color: var(--accent); text-shadow: 0 0 40px rgba(91, 252, 192, .35); font-variant-numeric: tabular-nums; }
+.burn.compact .burn-count { font-size: clamp(36px, 5.5vw, 60px); }
+.burn-bar { position: relative; margin-top: 22px; height: 6px; border-radius: 99px; background: rgba(255, 255, 255, .08); overflow: hidden; }
+.burn-bar div { height: 100%; background: linear-gradient(90deg, var(--accent-2), var(--accent)); box-shadow: 0 0 14px var(--accent); transition: width 1.2s ease; }
+.burn-facts { position: relative; margin-top: 22px; display: flex; flex-wrap: wrap; gap: 14px 32px; }
+.burn-facts > div { display: flex; flex-direction: column; gap: 2px; }
+.burn.flash .burn-hero { animation: burnflash 1.4s ease 2; }
+@keyframes burnflash { 30% { box-shadow: 0 0 0 1px var(--accent), 0 0 60px rgba(91, 252, 192, .35); } }
+.burn-feed-head { display: flex; justify-content: space-between; align-items: center; gap: 12px; }
+.burn-feed-head h3 { margin: 0; }
+.burn-rows { display: grid; margin-top: 10px; max-height: 520px; overflow-y: auto; }
+.burn.compact .burn-rows { max-height: none; }
+.burn-row { display: grid; grid-template-columns: 22px minmax(0, 1fr) auto; grid-template-rows: auto auto; column-gap: 10px; align-items: center; padding: 10px 6px; border-top: 1px solid var(--border); border-radius: 8px; }
+.burn-row:hover { background: rgba(255, 255, 255, .02); }
+.burn-fire { grid-row: span 2; font-size: 16px; }
+.burn-amt { font-size: 14px; }
+.burn-from { grid-column: 2; }
+.burn-when { grid-column: 3; grid-row: 1 / span 2; white-space: nowrap; }
+.burn-row.fresh { animation: freshrow 3s ease; }
+@keyframes freshrow { 0% { background: rgba(91, 252, 192, .22); transform: translateY(-6px); } 100% { background: transparent; transform: none; } }
+.burn-note { margin: 12px 0 0; }
+.burn-ca { margin-top: 16px; display: grid; gap: 10px; }
+@media (max-width: 900px) { .burn { grid-template-columns: 1fr; } }

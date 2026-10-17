@@ -18,6 +18,8 @@ untuk kripto dan saham tertokenisasi.*
 - **Hyperliquid perps** (`/#/hyperliquid`): every Hyperliquid perpetual traded from Larry, powered by Hyperliquid.
   Orders go straight to the Hyperliquid API with Larry's builder code (`VITE_HL_BUILDER`, `VITE_HL_BUILDER_FEE`);
   the builder address needs at least 100 USDC in its Hyperliquid perps account to receive fees.
+- **$LARRY burn tracker** (`/#/burn`, and on the landing page): total burned read live from the token contract
+  (dead and zero address balances), with every burn transfer listed as it lands.
 - **Agent Kit** (`agent-kit/`): MCP server and SDK that let AI agents trade on Larry and join the Agent Arena.
 - **Tests**: 16 contract tests, Agent Kit tests over a real MCP client, and a browser end to end test that drives the real UI.
 
