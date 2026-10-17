@@ -1,0 +1,20 @@
+{
+  // The $LARRY buyback keeper: buys and burns from Cloudflare, around the clock, with no server to run.
+  "name": "larry-burn-keeper",
+  "main": "src/index.ts",
+  "compatibility_date": "2025-09-01",
+  "durable_objects": { "bindings": [{ "name": "KEEPER", "class_name": "Keeper" }] },
+  "migrations": [{ "tag": "v1", "new_sqlite_classes": ["Keeper"] }],
+  // Once a minute the worker makes sure the keeper loop is running.
+  "triggers": { "crons": ["* * * * *"] },
+  "vars": {
+    "RPC_URL": "https://rpc.mainnet.chain.robinhood.com",
+    "BUYBACK": "0x7efd816ddd34a9c7f5b2814c5b912833c7d94945",
+    "POOL": "0x4d17d7ea9f4975738d088e7ec6c15062a6215f16",
+    // Fastest pace, in seconds. The keeper slows down on its own so the daily ETH limit lasts until midnight UTC.
+    "EVERY_SEC": "10",
+    // ETH per buy (each buy varies by up to 30%).
+    "AMOUNT_ETH": "0.00001",
+    "SLIPPAGE_BPS": "300"
+  }
+}

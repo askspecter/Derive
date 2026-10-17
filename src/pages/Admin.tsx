@@ -1196,6 +1196,7 @@ function BuybackSection() {
           </div>
         </div>
       </div>
+      <CloudKeeper bb={bb} keeper={k} />
       <BrowserKeeper bb={bb} keeper={k} route={poolAllowed ? 'pons' : v4Set ? 'v4' : null} />
       {!BUYBACK_CONTRACT && (
         <div className="callout">
@@ -1253,6 +1254,59 @@ function FindPool({ onFound }: { onFound: (f: Awaited<ReturnType<typeof findV4Po
         Find
       </button>
       {msg && <div className="muted small">{msg}</div>}
+    </div>
+  )
+}
+
+/** Hands the buybacks to the Cloudflare keeper (keeper/ in the repo), which runs around the clock. */
+function CloudKeeper({ bb, keeper }: { bb: Address; keeper?: Address }) {
+  const tx = useTx()
+  const config = useConfig()
+  const { sendTransactionAsync } = useSendTransaction()
+  const [addr, setAddr] = useState('')
+  const [gas, setGas] = useState('0.005')
+  const ok = isAddress(addr)
+  const already = ok && !!keeper && addr.toLowerCase() === keeper.toLowerCase()
+
+  return (
+    <div className="keeper card">
+      <div className="keeper-head">
+        <div>
+          <b>Cloud keeper (runs 24/7)</b>
+          <div className="muted small">
+            Deploy the keeper from the repo to Cloudflare (free), open its page and paste the keeper address it shows. It buys around the clock with no tab open.
+          </div>
+        </div>
+        {already && (
+          <span className="burn-live">
+            <i /> KEEPER
+          </span>
+        )}
+      </div>
+      <div className="form-grid">
+        <Field label="Cloud keeper address" suffix="from its page" value={addr} onChange={setAddr} wide />
+        <Field label="Gas to send" suffix="ETH" value={gas} onChange={setGas} />
+      </div>
+      <button
+        className="btn btn-accent btn-sm"
+        disabled={tx.busy || !ok}
+        onClick={() =>
+          tx.run('The cloud keeper is running the buybacks', async () => {
+            const a = getAddress(addr)
+            if (!already) await tx.write('Set keeper', { address: bb, abi: LarryBuybackAbi, functionName: 'setKeeper', args: [a] })
+            const v = parseEther(gas || '0')
+            if (v > 0n) {
+              tx.setStatus({ kind: 'pending', label: 'Send gas to the cloud keeper: confirm in your wallet' })
+              const hash = await sendTransactionAsync({ to: a, value: v, chainId: robinhood.id })
+              await waitForTransactionReceipt(config, { hash, chainId: robinhood.id })
+            }
+          })
+        }
+      >
+        {already ? 'Send it more gas' : 'Make it the keeper and send gas'}
+      </button>
+      <div className="muted small">The browser keeper below stops working once the cloud keeper takes over; only one keeper can be set.</div>
+      <TxNotice status={tx.status} />
     </div>
   )
 }
