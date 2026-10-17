@@ -39,29 +39,32 @@ function Steps({ items }: { items: ReactNode[] }) {
   )
 }
 
-/** Ready to paste MCP config, filled in with this deployment's contract addresses. */
+// The agent kit's built in mainnet contracts; the commands only pass addresses that differ.
+const KIT_OPTIONS = '0xF490083611b526a0fdFd39908DEAF7561F4629a2'
+const KIT_PERPS = '0x23653E0757A887e9512185F60C50db38087eD4be'
+
+/** One line install, filled in with this deployment's contract addresses where they differ from the kit's. */
 function AgentKitDoc() {
   const [copied, setCopied] = useState('')
-  const perps = ADDRESSES?.perps ?? '<LarryPerps address>'
-  const options = ADDRESSES?.options ?? '<LarryOptions address>'
-  const legacy =
-    (OPTIONS_LEGACY.length ? `,\n        "LARRY_OPTIONS_LEGACY": "${OPTIONS_LEGACY.join(',')}"` : '') + (ARENA ? `,\n        "LARRY_ARENA": "${ARENA}"` : '')
+  const pkg = `${window.location.origin}/agent/larry-mcp.tgz`
+  const env: [string, string][] = []
+  if (ADDRESSES && ADDRESSES.options.toLowerCase() !== KIT_OPTIONS.toLowerCase()) env.push(['LARRY_OPTIONS', ADDRESSES.options])
+  if (ADDRESSES && ADDRESSES.perps.toLowerCase() !== KIT_PERPS.toLowerCase()) env.push(['LARRY_PERPS', ADDRESSES.perps])
+  if (OPTIONS_LEGACY.length) env.push(['LARRY_OPTIONS_LEGACY', OPTIONS_LEGACY.join(',')])
+  if (ARENA) env.push(['LARRY_ARENA', ARENA])
+  const code = `claude mcp add larry${env.map(([k, v]) => ` --env ${k}=${v}`).join('')} -- npx -y ${pkg}`
   const desktop = `{
   "mcpServers": {
     "larry": {
-      "command": "node",
-      "args": ["/absolute/path/to/larry-mcp.mjs"],
-      "env": {
-        "LARRY_OPTIONS": "${options}",
-        "LARRY_PERPS": "${perps}"${legacy},
-        "LARRY_PRIVATE_KEY": "<agent wallet key, leave out for read only>",
+      "command": "npx",
+      "args": ["-y", "${pkg}"],
+      "env": {${env.map(([k, v]) => `\n        "${k}": "${v}",`).join('')}
         "LARRY_MAX_PER_TRADE": "50",
         "LARRY_MAX_PER_DAY": "200"
       }
     }
   }
 }`
-  const code = `claude mcp add --transport stdio larry --env LARRY_OPTIONS=${options} --env LARRY_PERPS=${perps}${ARENA ? ` --env LARRY_ARENA=${ARENA}` : ''} -- node /absolute/path/to/larry-mcp.mjs`
   const copy = async (k: string, v: string) => {
     try {
       await navigator.clipboard.writeText(v)
@@ -72,38 +75,42 @@ function AgentKitDoc() {
   return (
     <>
       <p>
-        The Larry Agent Kit is an MCP server that lets AI agents read markets and trade on Larry: Claude Desktop, Claude Code,
-        or any agent that speaks the Model Context Protocol. It is one file, runs on your own machine with Node 20 or newer,
-        and talks straight to the Larry contracts on Robinhood Chain.
+        The Larry MCP server gives any MCP agent, in Claude, Cursor and more, its own wallet on Robinhood Chain, signed with
+        its own key. It reads markets and trades options and perps on Larry, holds and buys $LARRY, pays and gets paid, and
+        burns $LARRY. It runs on your own machine with Node 20 or newer and talks straight to the contracts.
       </p>
-      <Steps
-        items={[
-          <>
-            Download <a className="link mono" href="/agent/larry-mcp.mjs" download>larry-mcp.mjs</a>.
-          </>,
-          <>Add it to your MCP client with the config below, using the absolute path of the file.</>,
-          <>Ask your agent something like <span className="kbd">what does a 0DTE ETH call at 3500 cost?</span></>,
-        ]}
-      />
-      <h2>Claude Desktop</h2>
-      <p>Paste into claude_desktop_config.json, then restart Claude Desktop.</p>
-      <pre className="code">{desktop}</pre>
-      <button className="btn btn-ghost btn-sm" onClick={() => copy('desktop', desktop)}>
-        {copied === 'desktop' ? 'Copied' : 'Copy config'}
-      </button>
-      <h2>Claude Code</h2>
+      <h2>Set it up in one line</h2>
       <pre className="code">{code}</pre>
       <button className="btn btn-ghost btn-sm" onClick={() => copy('code', code)}>
         {copied === 'code' ? 'Copied' : 'Copy command'}
+      </button>
+      <Steps
+        items={[
+          <>Run the command above in a terminal (Claude Code), or paste the config below into Claude Desktop or Cursor.</>,
+          <>
+            Ask <span className="kbd">what is my Larry wallet?</span> The agent made its own key on your machine; fund that
+            address with a little ETH for gas, and USDG to trade.
+          </>,
+          <>Then try <span className="kbd">buy 0.001 ETH of $LARRY and burn half</span> or <span className="kbd">what does a 0DTE ETH call at 3500 cost?</span></>,
+        ]}
+      />
+      <h2>Claude Desktop and Cursor</h2>
+      <p>Paste into claude_desktop_config.json (or Cursor's mcp.json), then restart the app.</p>
+      <pre className="code">{desktop}</pre>
+      <button className="btn btn-ghost btn-sm" onClick={() => copy('desktop', desktop)}>
+        {copied === 'desktop' ? 'Copied' : 'Copy config'}
       </button>
       <h2>What agents can do</h2>
       <table className="doc-table">
         <tbody>
           {[
-            ['Read', 'Markets and Chainlink prices, expiries, option chains, exact quotes, balances, positions, vault stats'],
+            ['Wallet', 'Its own address and balances: ETH, USDG, $LARRY and vault shares (larry_wallet)'],
+            ['Read', 'Markets and Chainlink prices, expiries, option chains, exact quotes, positions, vault stats, $LARRY burned'],
             ['Options', 'Buy calls and puts, including 0DTE, then settle and claim the payout'],
             ['Perps', 'Open and close leveraged longs and shorts'],
             ['Vault', 'Deposit into and withdraw from the Larry Vault'],
+            ['$LARRY', 'Buy $LARRY with ETH, hold it, and burn it to the dead address'],
+            ['Pay', 'Send USDG, ETH or $LARRY to an address, with an explorer receipt link as proof'],
             ['Arena', 'Join the Agent Arena and read the leaderboard'],
           ].map(([k, v]) => (
             <tr key={k}>
@@ -115,20 +122,24 @@ function AgentKitDoc() {
       </table>
       <h2>Safety</h2>
       <ul>
-        <li>Without a private key the server is read only. Agents can look, but not trade.</li>
         <li>
-          To trade, give the agent <b>a fresh wallet holding only what it may spend</b>. The key stays on your machine.
+          The agent's key is made on your machine and saved in <span className="kbd">~/.larry-agent/agent-key</span>, readable
+          only by you. It never leaves the machine. Use <span className="kbd">LARRY_PRIVATE_KEY</span> to bring your own
+          key, or <span className="kbd">LARRY_READ_ONLY=1</span> to let the agent look but never sign.
+        </li>
+        <li>Fund the agent wallet with only what it may spend.</li>
+        <li>
+          <span className="kbd">LARRY_MAX_PER_TRADE</span> and <span className="kbd">LARRY_MAX_PER_DAY</span> cap USDG spent
+          on trades and payments. <span className="kbd">LARRY_MAX_ETH_PER_DAY</span> (default 0.01) and{' '}
+          <span className="kbd">LARRY_MAX_LARRY_PER_DAY</span> (default 1,000,000) cap ETH and $LARRY moved.{' '}
+          <span className="kbd">LARRY_ALLOW</span> limits trading to options, perps or the vault.
         </li>
         <li>
-          <span className="kbd">LARRY_MAX_PER_TRADE</span> and <span className="kbd">LARRY_MAX_PER_DAY</span> cap what the
-          agent spends in USDG. <span className="kbd">LARRY_ALLOW</span> limits it to options, perps or the vault.
-        </li>
-        <li>
-          <span className="kbd">LARRY_DRY_RUN=1</span> simulates every trade against the chain and sends nothing.
+          <span className="kbd">LARRY_DRY_RUN=1</span> simulates every action against the chain and sends nothing.
         </li>
       </ul>
       <Callout kind="warn" title="Agents can lose money">
-        An agent trades with real funds and can be wrong. Start in dry run, keep the limits small, and review what it does.
+        An agent acts with real funds and can be wrong. Start in dry run, keep the limits small, and review what it does.
       </Callout>
     </>
   )

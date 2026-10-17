@@ -47,8 +47,8 @@ test('lists the Larry tools', async () => {
   const { tools } = await agent.listTools()
   const names = tools.map((t) => t.name).sort()
   assert.deepEqual(names, [
-    'larry_arena_join', 'larry_arena_leaderboard', 'larry_balances', 'larry_buy_option', 'larry_claim_option', 'larry_close_perp', 'larry_expiries', 'larry_limits', 'larry_markets',
-    'larry_open_perp', 'larry_option_chain', 'larry_positions', 'larry_quote_option', 'larry_vault', 'larry_vault_deposit', 'larry_vault_withdraw',
+    'larry_arena_join', 'larry_arena_leaderboard', 'larry_balances', 'larry_burn_larry', 'larry_burn_stats', 'larry_buy_larry', 'larry_buy_option', 'larry_claim_option', 'larry_close_perp', 'larry_expiries', 'larry_limits', 'larry_markets',
+    'larry_open_perp', 'larry_option_chain', 'larry_pay', 'larry_positions', 'larry_quote_option', 'larry_vault', 'larry_vault_deposit', 'larry_vault_withdraw', 'larry_wallet',
   ])
   assert.equal(tools.find((t) => t.name === 'larry_markets').annotations.readOnlyHint, true)
   assert.equal(tools.find((t) => t.name === 'larry_buy_option').annotations.destructiveHint, true)
@@ -117,7 +117,7 @@ test('enforces the per trade and daily limits', async () => {
 })
 
 test('read only, allow list and dry run modes', async () => {
-  const ro = await connect({})
+  const ro = await connect({ LARRY_READ_ONLY: '1' })
   const r1 = await call(ro, 'larry_buy_option', { symbol: 'ETH', type: 'put', strike: 3300, expiry: 'friday', contracts: 0.1 })
   assert.match(r1.text, /Read only/)
   assert.equal((await call(ro, 'larry_positions', { address: env.trader })).data.options.length, 1)
@@ -156,7 +156,7 @@ test('settles and claims an expired 0DTE option', async () => {
 })
 
 test('joins the Agent Arena and is ranked from its onchain trades only', async () => {
-  const ro = await connect({})
+  const ro = await connect({ LARRY_READ_ONLY: '1' })
   const empty = await call(ro, 'larry_arena_leaderboard')
   assert.equal(empty.error, false, empty.text)
   assert.equal(empty.data.agents, 0)
@@ -203,5 +203,32 @@ test('joins the Agent Arena and is ranked from its onchain trades only', async (
   assert.equal(me.biggestTrade, 50)
   assert.equal(me.withinLimits, true)
   assert.deepEqual(b.data.leaderboard.map((x) => x.name), ['Night Owl'])
+  await a.close()
+})
+
+test('gives the agent its own wallet, kept across restarts', async () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'larry-w-'))
+  const a = await connect({ LARRY_STATE_DIR: dir })
+  const w = await call(a, 'larry_wallet')
+  assert.equal(w.error, false, w.text)
+  assert.match(w.data.address, /^0x[0-9a-fA-F]{40}$/)
+  assert.equal(fs.statSync(path.join(dir, 'agent-key')).mode & 0o777, 0o600)
+  await a.close()
+  const b = await connect({ LARRY_STATE_DIR: dir })
+  assert.equal((await call(b, 'larry_wallet')).data.address, w.data.address)
+  await b.close()
+})
+
+test('pays USDG with a receipt, inside the limits', async () => {
+  const to = '0x000000000000000000000000000000000000bEEF'
+  const a = await connect({ LARRY_PRIVATE_KEY: TRADER_KEY, LARRY_MAX_PER_TRADE: '20', LARRY_MAX_PER_DAY: '30', LARRY_STATE_DIR: fs.mkdtempSync(path.join(os.tmpdir(), 'larry-p-')) })
+  const r = await call(a, 'larry_pay', { to, amount: 12.5, asset: 'USDG' })
+  assert.equal(r.error, false, r.text)
+  assert.match(r.data.receipt, /\/tx\/0x/)
+  assert.equal((await call(a, 'larry_balances', { address: to })).data.USDG, 12.5)
+  assert.match((await call(a, 'larry_pay', { to, amount: 25, asset: 'USDG' })).text, /per trade limit/)
+  assert.match((await call(a, 'larry_pay', { to, amount: 18, asset: 'USDG' })).text, /Daily limit/)
+  assert.match((await call(a, 'larry_pay', { to, amount: 1, asset: 'ETH' })).text, /Daily ETH limit/)
+  assert.match((await call(a, 'larry_pay', { to: 'nope', amount: 1, asset: 'USDG' })).text, /Not an address/)
   await a.close()
 })

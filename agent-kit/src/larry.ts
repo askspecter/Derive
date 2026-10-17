@@ -14,12 +14,16 @@ import {
   getAddress,
   http,
   isAddress,
+  parseAbi,
+  parseEther,
   parseUnits,
+  encodeFunctionData,
+  hexToBigInt,
   zeroAddress,
   type Address,
   type Hex,
 } from 'viem'
-import { privateKeyToAccount } from 'viem/accounts'
+import { generatePrivateKey, privateKeyToAccount } from 'viem/accounts'
 import { ASSETS, type Asset } from '../../src/config/markets'
 import { LarryArenaAbi, LarryOptionsAbi, LarryPerpsAbi, LarryPoolAbi, aggregatorAbi } from '../../src/lib/abis'
 import { loadArena, readArenaAgents } from '../../src/lib/arenaCore'
@@ -27,6 +31,12 @@ import { strikesAround, validExpiries } from '../../src/lib/expiries'
 
 /** Options contract with daily (0DTE) expiries, live on Robinhood Chain mainnet. */
 export const DEFAULT_OPTIONS: Address = '0xF490083611b526a0fdFd39908DEAF7561F4629a2'
+/** Perps contract live on Robinhood Chain mainnet. */
+export const DEFAULT_PERPS: Address = '0x23653E0757A887e9512185F60C50db38087eD4be'
+/** $LARRY, its Pons pool, and where burned tokens go. */
+export const LARRY_TOKEN: Address = '0x72587018a341d5B668C0479e73b2Ee1c8D06f4f4'
+export const LARRY_DEX_POOL: Address = '0x4d17D7Ea9F4975738d088e7EC6C15062A6215f16'
+export const DEAD: Address = '0x000000000000000000000000000000000000dEaD'
 export const DEFAULT_RPC = 'https://rpc.mainnet.chain.robinhood.com'
 export const EXPLORER = 'https://robinhoodchain.blockscout.com'
 const OPTION_SLIPPAGE = 101n // pay at most 1% above the quote
@@ -48,7 +58,13 @@ export interface LarryConfig {
   /** Spending caps in collateral units (USDG), enforced before anything is sent. */
   maxPerTrade?: number
   maxPerDay?: number
+  /** Daily caps for ETH spent (buying $LARRY, sending ETH) and $LARRY moved (sending or burning). */
+  maxEthPerDay?: number
+  maxLarryPerDay?: number
   allow?: Action[]
+  /** $LARRY token and the pool it trades on (defaults: mainnet). */
+  larryToken?: Address
+  larryDexPool?: Address
   /** Simulate writes and return a preview without sending them. */
   dryRun?: boolean
   stateDir?: string
@@ -64,17 +80,37 @@ export function configFromEnv(env: NodeJS.ProcessEnv = process.env): LarryConfig
   return {
     rpcUrl: env.LARRY_RPC_URL || DEFAULT_RPC,
     options: addr(env.LARRY_OPTIONS) ?? DEFAULT_OPTIONS,
-    perps: addr(env.LARRY_PERPS),
+    perps: addr(env.LARRY_PERPS) ?? DEFAULT_PERPS,
     pool: addr(env.LARRY_POOL),
     arena: addr(env.LARRY_ARENA),
     optionsLegacy: (env.LARRY_OPTIONS_LEGACY ?? '').split(',').map(addr).filter((a): a is Address => !!a),
     privateKey: env.LARRY_PRIVATE_KEY ? ((env.LARRY_PRIVATE_KEY.startsWith('0x') ? env.LARRY_PRIVATE_KEY : `0x${env.LARRY_PRIVATE_KEY}`) as Hex) : undefined,
     maxPerTrade: Number(env.LARRY_MAX_PER_TRADE ?? 100),
     maxPerDay: Number(env.LARRY_MAX_PER_DAY ?? 500),
+    maxEthPerDay: Number(env.LARRY_MAX_ETH_PER_DAY ?? 0.01),
+    maxLarryPerDay: Number(env.LARRY_MAX_LARRY_PER_DAY ?? 1_000_000),
     allow,
+    larryToken: addr(env.LARRY_TOKEN) ?? LARRY_TOKEN,
+    larryDexPool: addr(env.LARRY_DEX_POOL) ?? LARRY_DEX_POOL,
     dryRun: env.LARRY_DRY_RUN === '1' || env.LARRY_DRY_RUN === 'true',
     stateDir: env.LARRY_STATE_DIR || path.join(os.homedir(), '.larry-agent'),
   }
+}
+
+/**
+ * The agent's own key: made once on this machine and kept in the state folder (readable only by this
+ * user), so an agent gets its own wallet without anyone pasting a key. It never leaves the machine.
+ */
+export function loadOrCreateAgentKey(stateDir: string): { key: Hex; file: string; created: boolean } {
+  const file = path.join(stateDir, 'agent-key')
+  try {
+    const k = fs.readFileSync(file, 'utf8').trim()
+    if (/^0x[0-9a-fA-F]{64}$/.test(k)) return { key: k as Hex, file, created: false }
+  } catch {}
+  const key = generatePrivateKey()
+  fs.mkdirSync(stateDir, { recursive: true, mode: 0o700 })
+  fs.writeFileSync(file, key + '\n', { mode: 0o600, flag: 'wx' })
+  return { key, file, created: true }
 }
 
 export const robinhoodChain = (rpcUrl: string) =>
@@ -141,6 +177,7 @@ function findAsset(symbol: string): Asset {
   return a
 }
 
+const PONS = parseAbi(['function buy(uint256 ethIn, uint256 minOut, address to) payable returns (uint256)'])
 const num = (v: bigint, decimals: number) => Number(formatUnits(v, decimals))
 const iso = (ts: number | bigint) => new Date(Number(ts) * 1000).toISOString().replace('.000Z', 'Z')
 
@@ -347,16 +384,18 @@ export class Larry {
     const me = this.owner(address)
     const t = await this.token()
     const pool = await this.pool()
-    const [usdg, eth, shares] = await Promise.all([
+    const [usdg, eth, shares, larry] = await Promise.all([
       this.pub.readContract({ address: t.address, abi: erc20Abi, functionName: 'balanceOf', args: [me] }),
       this.pub.getBalance({ address: me }),
       this.pub.readContract({ address: pool, abi: LarryPoolAbi, functionName: 'balanceOf', args: [me] }),
+      this.pub.readContract({ address: this.cfg.larryToken, abi: erc20Abi, functionName: 'balanceOf', args: [me] }).catch(() => 0n),
     ])
     const vaultValue = shares > 0n ? await this.pub.readContract({ address: pool, abi: LarryPoolAbi, functionName: 'convertToAssets', args: [shares] }) : 0n
     return {
       address: me,
       [t.symbol]: num(usdg, t.decimals),
       ETH: num(eth, 18),
+      LARRY: num(larry, 18),
       vaultShares: num(shares, 18),
       vaultValue: num(vaultValue, t.decimals),
       limits: this.account && me === this.account.address ? this.limits() : undefined,
@@ -441,22 +480,36 @@ export class Larry {
   private statePath() {
     return path.join(this.cfg.stateDir, `spend-${(this.account?.address ?? 'none').toLowerCase()}.json`)
   }
-  private spentToday(): number {
+  private readState(): { day: string; spent: number; eth: number; larry: number } {
+    const day = new Date().toISOString().slice(0, 10)
     try {
       const s = JSON.parse(fs.readFileSync(this.statePath(), 'utf8'))
-      return s.day === new Date().toISOString().slice(0, 10) ? Number(s.spent) || 0 : 0
-    } catch {
-      return 0
-    }
+      if (s.day === day) return { day, spent: Number(s.spent) || 0, eth: Number(s.eth) || 0, larry: Number(s.larry) || 0 }
+    } catch {}
+    return { day, spent: 0, eth: 0, larry: 0 }
   }
-  private recordSpend(amount: number) {
-    const day = new Date().toISOString().slice(0, 10)
+  private spentToday(): number {
+    return this.readState().spent
+  }
+  private recordSpend(amount: number, kind: 'spent' | 'eth' | 'larry' = 'spent') {
+    const s = this.readState()
+    s[kind] += amount
     fs.mkdirSync(this.cfg.stateDir, { recursive: true })
-    fs.writeFileSync(this.statePath(), JSON.stringify({ day, spent: this.spentToday() + amount }))
+    fs.writeFileSync(this.statePath(), JSON.stringify(s))
   }
   limits() {
     const spent = this.spentToday()
-    return { maxPerTrade: this.cfg.maxPerTrade, maxPerDay: this.cfg.maxPerDay, spentToday: spent, leftToday: Math.max(0, this.cfg.maxPerDay - spent), allow: this.cfg.allow, dryRun: this.cfg.dryRun }
+    const s = this.readState()
+    return {
+      maxPerTrade: this.cfg.maxPerTrade,
+      maxPerDay: this.cfg.maxPerDay,
+      spentToday: spent,
+      leftToday: Math.max(0, this.cfg.maxPerDay - spent),
+      eth: { maxPerDay: this.cfg.maxEthPerDay, spentToday: s.eth, leftToday: Math.max(0, this.cfg.maxEthPerDay - s.eth) },
+      larry: { maxPerDay: this.cfg.maxLarryPerDay, movedToday: s.larry, leftToday: Math.max(0, this.cfg.maxLarryPerDay - s.larry) },
+      allow: this.cfg.allow,
+      dryRun: this.cfg.dryRun,
+    }
   }
   private guard(action: Action, spend: number) {
     if (!this.wallet || !this.account) throw new LarryError('Read only: set LARRY_PRIVATE_KEY to an agent wallet to trade.')
@@ -586,6 +639,97 @@ export class Larry {
   }
 
   // -------------------------------------------------------------- arena
+
+  // ------------------------------------------------------------- $LARRY: hold, pay, burn
+
+  private needWallet() {
+    if (!this.wallet || !this.account) throw new LarryError('Read only: this agent has no wallet.')
+    return this.account
+  }
+  private guardMove(kind: 'eth' | 'larry', amount: number) {
+    const s = this.readState()
+    const max = kind === 'eth' ? this.cfg.maxEthPerDay : this.cfg.maxLarryPerDay
+    const label = kind === 'eth' ? 'ETH' : '$LARRY'
+    if (s[kind] + amount > max) throw new LarryError(`Daily ${label} limit: ${s[kind]} of ${max} ${label} used today, this needs ${amount}.`)
+  }
+  private async sendRaw(label: string, tx: { to: Address; value?: bigint; data?: Hex }) {
+    const account = this.needWallet()
+    await this.pub.call({ account, ...tx }).catch(explain)
+    if (this.cfg.dryRun) return { label, dryRun: true as const, simulated: true }
+    const hash = await this.wallet!.sendTransaction({ account, chain: this.wallet!.chain, ...tx })
+    const r = await this.pub.waitForTransactionReceipt({ hash })
+    if (r.status !== 'success') throw new LarryError(`${label} reverted: ${EXPLORER}/tx/${hash}`)
+    return { label, hash, explorer: `${EXPLORER}/tx/${hash}` }
+  }
+
+  /** The agent's own wallet: its address and everything it holds. */
+  async myWallet() {
+    const account = this.account
+    if (!account) return { address: null, readOnly: true, note: 'Read only: no agent wallet.' }
+    return { ...(await this.balances(account.address)), fund: `Send ETH (for gas and $LARRY buys) or USDG (for trading) on Robinhood Chain to ${account.address}.` }
+  }
+
+  /** Quote and buy $LARRY with ETH on its Pons pool. */
+  async buyLarry(eth: number, slippagePct = 2) {
+    const account = this.needWallet()
+    if (!(eth > 0)) throw new LarryError('Amount must be above zero.')
+    this.guardMove('eth', eth)
+    const value = parseEther(String(eth))
+    const pool = this.cfg.larryDexPool
+    const q = await this.pub.call({ account, to: pool, value, data: encodeFunctionData({ abi: PONS, functionName: 'buy', args: [value, 0n, account.address] }) }).catch(explain)
+    const quote = hexToBigInt(q.data!)
+    const minOut = (quote * BigInt(Math.round((100 - slippagePct) * 100))) / 10_000n
+    const tx = await this.sendRaw('Buy $LARRY', { to: pool, value, data: encodeFunctionData({ abi: PONS, functionName: 'buy', args: [value, minOut, account.address] }) })
+    if (!this.cfg.dryRun) this.recordSpend(eth, 'eth')
+    return { spentEth: eth, expectedLarry: num(quote, 18), minLarry: num(minOut, 18), transactions: [tx], limits: this.limits() }
+  }
+
+  /** Pays someone in USDG, ETH or $LARRY from the agent wallet, inside the daily limits. */
+  async pay(p: { to: string; amount: number; asset: 'USDG' | 'ETH' | 'LARRY' }) {
+    this.needWallet()
+    const to = addr(p.to)
+    if (!to) throw new LarryError(`Not an address: ${p.to}`)
+    if (!(p.amount > 0)) throw new LarryError('Amount must be above zero.')
+    let tx
+    if (p.asset === 'ETH') {
+      this.guardMove('eth', p.amount)
+      tx = await this.sendRaw(`Send ${p.amount} ETH`, { to, value: parseEther(String(p.amount)) })
+      if (!this.cfg.dryRun) this.recordSpend(p.amount, 'eth')
+    } else if (p.asset === 'LARRY') {
+      this.guardMove('larry', p.amount)
+      tx = await this.sendRaw(`Send ${p.amount} $LARRY`, { to: this.cfg.larryToken, data: encodeFunctionData({ abi: erc20Abi, functionName: 'transfer', args: [to, parseUnits(String(p.amount), 18)] }) })
+      if (!this.cfg.dryRun) this.recordSpend(p.amount, 'larry')
+    } else {
+      const t = await this.token()
+      if (p.amount > this.cfg.maxPerTrade) throw new LarryError(`This payment is ${p.amount}, above the per trade limit of ${this.cfg.maxPerTrade}.`)
+      if (this.spentToday() + p.amount > this.cfg.maxPerDay) throw new LarryError(`Daily limit reached: ${this.spentToday().toFixed(2)} of ${this.cfg.maxPerDay} spent today.`)
+      tx = await this.send(`Send ${p.amount} ${t.symbol}`, { address: t.address, abi: erc20Abi, functionName: 'transfer', args: [to, parseUnits(String(p.amount), t.decimals)] })
+      if (!this.cfg.dryRun) this.recordSpend(p.amount)
+    }
+    return { paid: p.amount, asset: p.asset, to, receipt: 'explorer' in tx ? tx.explorer : undefined, transactions: [tx], limits: this.limits() }
+  }
+
+  /** Burns $LARRY from the agent wallet: sends it to the dead address, where nobody can move it. */
+  async burnLarry(amount: number) {
+    this.needWallet()
+    if (!(amount > 0)) throw new LarryError('Amount must be above zero.')
+    this.guardMove('larry', amount)
+    const tx = await this.sendRaw(`Burn ${amount} $LARRY`, { to: this.cfg.larryToken, data: encodeFunctionData({ abi: erc20Abi, functionName: 'transfer', args: [DEAD, parseUnits(String(amount), 18)] }) })
+    if (!this.cfg.dryRun) this.recordSpend(amount, 'larry')
+    return { burned: amount, transactions: [tx], ...(await this.burnStats()) }
+  }
+
+  /** $LARRY burned so far: what sits at the dead and zero addresses. */
+  async burnStats() {
+    const t = this.cfg.larryToken
+    const [dead, zero, supply] = await Promise.all([
+      this.pub.readContract({ address: t, abi: erc20Abi, functionName: 'balanceOf', args: [DEAD] }),
+      this.pub.readContract({ address: t, abi: erc20Abi, functionName: 'balanceOf', args: [zeroAddress] }),
+      this.pub.readContract({ address: t, abi: erc20Abi, functionName: 'totalSupply' }),
+    ])
+    const burned = dead + zero
+    return { token: t, totalBurned: num(burned, 18), totalSupply: num(supply, 18), burnedPct: supply > 0n ? Number((burned * 1_000_000n) / supply) / 10_000 : 0, tracker: 'https://larry.exchange/#/burn' }
+  }
 
   private arenaAddress(): Address {
     if (!this.cfg.arena) throw new LarryError('The Agent Arena address is not set. Set LARRY_ARENA, see larry.exchange/#/docs/arena.')

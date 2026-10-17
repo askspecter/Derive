@@ -4,14 +4,15 @@
 import { McpServer } from '@modelcontextprotocol/server'
 import { serveStdio } from '@modelcontextprotocol/server/stdio'
 import { z } from 'zod'
-import { configFromEnv, Larry, LarryError } from './larry'
+import { configFromEnv, Larry, LarryError, loadOrCreateAgentKey } from './larry'
 
-const VERSION = '0.1.0'
+const VERSION = '0.2.0'
 
 const INSTRUCTIONS = `Larry is an onchain derivatives exchange on Robinhood Chain (chain id 4663).
 Products: options (European calls and puts, cash settled in USDG, Friday expiries plus daily 0DTE expiries at 08:00 UTC on some markets), perpetuals (isolated margin, Chainlink prices) and the Larry Vault (LPs earn from every trade).
 Always check larry_markets first, and quote before buying. A bought option can lose at most what was paid for it. Perps can be liquidated.
 The Agent Arena ranks agents in public by their onchain PnL. Only join it (larry_arena_join) when the user asks.
+The agent has its own wallet on Robinhood Chain (larry_wallet). It can hold $LARRY, buy it with ETH (larry_buy_larry), pay USDG, ETH or $LARRY to an address (larry_pay) and burn $LARRY (larry_burn_larry). Only pay or burn when the user asks, and confirm the address and amount first.
 Trading tools spend real money from the configured agent wallet and are capped by the limits in larry_limits. Tell the user what a trade costs and its maximum loss before placing it.`
 
 const ok = (data: unknown) => ({ content: [{ type: 'text' as const, text: JSON.stringify(data, null, 2) }] })
@@ -33,7 +34,7 @@ const optionArgs = {
 const READ = { readOnlyHint: true, openWorldHint: true }
 const WRITE = { readOnlyHint: false, destructiveHint: true, openWorldHint: true }
 
-export function createServer(larry = new Larry(configFromEnv())) {
+export function createServer(larry = larryFromEnv()) {
   const server = new McpServer({ name: 'larry', version: VERSION }, { capabilities: { tools: {} }, instructions: INSTRUCTIONS })
 
   server.registerTool('larry_markets', { title: 'Markets', description: 'Every listed market on Larry with its Chainlink price and what can be traded: options (implied vol, daily 0DTE expiries) and perps (max leverage, fees).', inputSchema: z.object({}), annotations: READ }, () => run(() => larry.markets()))
@@ -68,7 +69,28 @@ export function createServer(larry = new Larry(configFromEnv())) {
 
   server.registerTool('larry_arena_join', { title: 'Join the Agent Arena', description: 'Registers the agent wallet in the public Agent Arena under a name, declaring the per trade and daily limits this kit enforces. Limits become public and can only be lowered. Costs gas only, no USDG.', inputSchema: z.object({ name: z.string().min(3).max(24).describe('Public agent name, 3 to 24 letters, digits, spaces, dots, dashes or underscores') }), annotations: { readOnlyHint: false, destructiveHint: false, openWorldHint: true } }, ({ name }) => run(() => larry.arenaJoin(name)))
 
+  server.registerTool('larry_wallet', { title: 'Agent wallet', description: "The agent's own wallet on Robinhood Chain: its address, and its ETH, USDG, $LARRY and Larry Vault balances. Share the address to get paid or funded.", inputSchema: z.object({}), annotations: READ }, () => run(() => larry.myWallet()))
+
+  server.registerTool('larry_buy_larry', { title: 'Buy $LARRY', description: 'Buys $LARRY with ETH from the agent wallet on its Pons pool on Robinhood Chain. Quotes first and accepts at most the given slippage. Capped by the daily ETH limit.', inputSchema: z.object({ eth: z.number().positive().describe('ETH to spend'), slippagePct: z.number().min(0.1).max(20).optional().describe('Max slippage in percent, default 2') }), annotations: WRITE }, ({ eth, slippagePct }) => run(() => larry.buyLarry(eth, slippagePct)))
+
+  server.registerTool('larry_pay', { title: 'Pay', description: 'Sends USDG, ETH or $LARRY from the agent wallet to an address. Returns an explorer receipt link that proves the payment. Capped by the daily limits.', inputSchema: z.object({ to: z.string().describe('Recipient address (0x...)'), amount: z.number().positive(), asset: z.enum(['USDG', 'ETH', 'LARRY']) }), annotations: WRITE }, (a) => run(() => larry.pay(a)))
+
+  server.registerTool('larry_burn_larry', { title: 'Burn $LARRY', description: 'Burns $LARRY from the agent wallet by sending it to the dead address, where nobody can ever move it. Counts against the daily $LARRY limit.', inputSchema: z.object({ amount: z.number().positive().describe('$LARRY to burn') }), annotations: WRITE }, ({ amount }) => run(() => larry.burnLarry(amount)))
+
+  server.registerTool('larry_burn_stats', { title: '$LARRY burned', description: 'Total $LARRY burned so far (held by the dead and zero addresses), the share of supply, and the live burn tracker link.', inputSchema: z.object({}), annotations: READ }, () => run(() => larry.burnStats()))
+
   return server
 }
 
-serveStdio(() => createServer())
+/** Without LARRY_PRIVATE_KEY the agent gets its own key, made on this machine, unless LARRY_READ_ONLY=1. */
+function larryFromEnv() {
+  const cfg = configFromEnv()
+  if (!cfg.privateKey && process.env.LARRY_READ_ONLY !== '1' && process.env.LARRY_READ_ONLY !== 'true') {
+    const k = loadOrCreateAgentKey(cfg.stateDir!)
+    cfg.privateKey = k.key
+    if (k.created) console.error(`Larry: made a new agent wallet, key saved at ${k.file}`)
+  }
+  return new Larry(cfg)
+}
+
+serveStdio(() => createServer(larryFromEnv()))

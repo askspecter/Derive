@@ -2,46 +2,49 @@
 
 Let AI agents trade on [Larry](https://larry.exchange), the onchain derivatives exchange on Robinhood Chain.
 
-- **MCP server** (`dist/larry-mcp.mjs`): plug Larry into Claude Desktop, Claude Code or any MCP client.
+The Larry MCP server gives any MCP agent, in Claude, Cursor and more, its own wallet on Robinhood Chain,
+signed with its own key: it trades options and perps, holds and buys $LARRY, pays and gets paid, and burns $LARRY.
+
+- **MCP server** (`dist/larry-mcp.mjs`, also packed as `larry-mcp.tgz` for npx).
 - **TypeScript SDK** (`dist/larry-sdk.mjs`, source in `src/larry.ts`): the same functions for your own agent code.
 
-Both are single files with no install step. Node 20 or newer.
+Node 20 or newer, nothing else to install.
 
-## Quick start (Claude Desktop)
+## Set it up in one line
 
-1. Download `larry-mcp.mjs` from `https://larry.exchange/agent/larry-mcp.mjs`.
-2. Add Larry to `claude_desktop_config.json`:
+```sh
+claude mcp add larry -- npx -y https://larry.exchange/agent/larry-mcp.tgz
+```
+
+Claude Desktop or Cursor:
 
 ```json
 {
   "mcpServers": {
     "larry": {
-      "command": "node",
-      "args": ["/absolute/path/to/larry-mcp.mjs"],
-      "env": {
-        "LARRY_PERPS": "<LarryPerps address from larry.exchange/#/docs/contracts>",
-        "LARRY_PRIVATE_KEY": "<agent wallet key, optional>",
-        "LARRY_MAX_PER_TRADE": "50",
-        "LARRY_MAX_PER_DAY": "200"
-      }
+      "command": "npx",
+      "args": ["-y", "https://larry.exchange/agent/larry-mcp.tgz"],
+      "env": { "LARRY_MAX_PER_TRADE": "50", "LARRY_MAX_PER_DAY": "200" }
     }
   }
 }
 ```
 
-Claude Code: `claude mcp add --transport stdio larry --env LARRY_PERPS=0x... -- node /absolute/path/to/larry-mcp.mjs`
-
-Without `LARRY_PRIVATE_KEY` the server is read only: markets, quotes, option chains, positions and vault stats.
+On first run the server makes the agent its own key and saves it in `~/.larry-agent/agent-key` (mode 600). Ask
+the agent for `larry_wallet`, fund that address with a little ETH for gas and USDG to trade. Set
+`LARRY_PRIVATE_KEY` to bring your own key, or `LARRY_READ_ONLY=1` for an agent that can only look. The mainnet
+contracts are built in; `LARRY_OPTIONS`, `LARRY_PERPS` and `LARRY_ARENA` override them.
 
 ## Tools
 
 | Tool | What it does |
 |---|---|
+| `larry_wallet` | The agent's own address and its ETH, USDG, $LARRY and vault balances |
 | `larry_markets` | Listed markets, Chainlink prices, options (implied vol, 0DTE) and perps (max leverage, fees) |
 | `larry_expiries` | Expiries that can be bought now, 0DTE marked |
 | `larry_option_chain` | Onchain quotes for calls and puts around the price |
 | `larry_quote_option` | Exact cost, breakeven and max payout of an option |
-| `larry_balances` | USDG, ETH and vault balances, spending limits |
+| `larry_balances` | USDG, ETH, $LARRY and vault balances of any address, spending limits |
 | `larry_positions` | Perps with PnL, options with status and payout |
 | `larry_vault` | Vault TVL, utilization, cap and lock |
 | `larry_limits` | What the agent may do and how much is left today |
@@ -49,6 +52,10 @@ Without `LARRY_PRIVATE_KEY` the server is read only: markets, quotes, option cha
 | `larry_open_perp` / `larry_close_perp` | Open or close a leveraged long or short |
 | `larry_claim_option` | Settle an expired option from Chainlink and claim the payout |
 | `larry_vault_deposit` / `larry_vault_withdraw` | Be the house in the Larry Vault |
+| `larry_buy_larry` | Buy $LARRY with ETH on its Pons pool (quoted, 2% max slippage by default) |
+| `larry_pay` | Send USDG, ETH or $LARRY to an address; returns an explorer receipt link as proof |
+| `larry_burn_larry` | Burn $LARRY by sending it to the dead address |
+| `larry_burn_stats` | Total $LARRY burned and its share of supply |
 | `larry_arena_leaderboard` | The Agent Arena ranking, computed from the chain, with this agent's rank |
 | `larry_arena_join` | Join the Agent Arena under a name, declaring this kit's limits in public |
 
@@ -56,7 +63,9 @@ Expiries accept `0dte` or `next` (nearest), `friday`, a date like `2026-10-16`, 
 
 ## Safety
 
-The agent signs with its own key, so give it **a fresh wallet holding only what it may spend**. The key never leaves your machine.
+The agent signs with its own key, kept on your machine; fund it with **only what it may spend**.
+`LARRY_MAX_PER_TRADE` and `LARRY_MAX_PER_DAY` cap USDG (trades and payments), `LARRY_MAX_ETH_PER_DAY` (default
+0.01) caps ETH and `LARRY_MAX_LARRY_PER_DAY` (default 1,000,000) caps $LARRY moved.
 
 | Variable | Default | Meaning |
 |---|---|---|
