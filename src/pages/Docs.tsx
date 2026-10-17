@@ -4,6 +4,7 @@ import { SmartLink as Link } from '../components/SmartLink'
 import { ROBINHOOD_CHAIN } from '../config/chains'
 import { ASSETS } from '../config/markets'
 import { ADDRESSES, ARENA, OPTIONS_LEGACY } from '../config/protocol'
+import { SITE_ORIGIN, SPLIT_HOSTS } from '../config/site'
 import { LARRY_TOKEN } from '../config/token'
 import { HL_BUILDER_FEE_PCT } from '../config/hyperliquid'
 import { TokenCA } from '../components/TokenCA'
@@ -46,7 +47,7 @@ const KIT_PERPS = '0x23653E0757A887e9512185F60C50db38087eD4be'
 /** One line install, filled in with this deployment's contract addresses where they differ from the kit's. */
 function AgentKitDoc() {
   const [copied, setCopied] = useState('')
-  const pkg = `${window.location.origin}/agent/larry-mcp.tgz`
+  const pkg = `${SPLIT_HOSTS ? SITE_ORIGIN : window.location.origin}/agent/larry-mcp.tgz`
   const env: [string, string][] = []
   if (ADDRESSES && ADDRESSES.options.toLowerCase() !== KIT_OPTIONS.toLowerCase()) env.push(['LARRY_OPTIONS', ADDRESSES.options])
   if (ADDRESSES && ADDRESSES.perps.toLowerCase() !== KIT_PERPS.toLowerCase()) env.push(['LARRY_PERPS', ADDRESSES.perps])

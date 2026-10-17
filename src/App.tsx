@@ -12,17 +12,18 @@ import { Stats } from './pages/Stats'
 import { Docs } from './pages/Docs'
 import { WalletProvider } from './lib/wallet'
 import { ProtocolProvider } from './lib/protocol'
-import { APP_ORIGIN, IS_APP_HOST, SPLIT_HOSTS, isAppPath } from './config/site'
+import { IS_APP_HOST, IS_DOCS_HOST, SPLIT_HOSTS, redirectUrl } from './config/site'
 import { Admin } from './pages/Admin'
 import { Arena } from './pages/Arena'
 import { Hyperliquid } from './pages/Hyperliquid'
 import { BurnPage } from './pages/Burn'
 
-/** Sends app routes opened on larry.exchange over to app.larry.exchange. */
+/** Sends a route opened on the wrong host to its own: app routes to app., docs to docs., the rest to the root site. */
 function HostRouting() {
   const { pathname, search } = useLocation()
   useEffect(() => {
-    if (SPLIT_HOSTS && !IS_APP_HOST && isAppPath(pathname)) window.location.replace(`${APP_ORIGIN}/#${pathname}${search}`)
+    const url = redirectUrl(pathname + search)
+    if (url) window.location.replace(url)
   }, [pathname, search])
   return null
 }
@@ -44,7 +45,7 @@ export default function App() {
             <WrongNetwork />
             <main>
               <Routes>
-                <Route path="/" element={SPLIT_HOSTS && IS_APP_HOST ? <Navigate to="/perps" replace /> : <Home />} />
+                <Route path="/" element={SPLIT_HOSTS && IS_APP_HOST ? <Navigate to="/perps" replace /> : SPLIT_HOSTS && IS_DOCS_HOST ? <Navigate to="/docs" replace /> : <Home />} />
                 <Route path="/options" element={<Options />} />
                 <Route path="/perps" element={<Perps />} />
                 <Route path="/vaults" element={<Vaults />} />
