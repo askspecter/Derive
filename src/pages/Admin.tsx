@@ -12,6 +12,9 @@ import { LarryArenaAbi, LarryBuybackAbi, LarryOptionsAbi, LarryPerpsAbi, LarryPo
 import { LarryArenaBytecode, LarryBuybackBytecode, LarryOptionsBytecode, LarryPerpsBytecode, LarryPoolBytecode } from '../contracts/bytecode'
 import { useProtocol, type OptionMarket, type PerpMarket } from '../lib/protocol'
 import { BUYBACK_CONTRACT, LARRY_TOKEN } from '../config/token'
+import { findV4Pool, keeperKey, useBrowserKeeper } from '../lib/buybackKeeper'
+import { privateKeyToAccount } from 'viem/accounts'
+import { usePublicClient } from 'wagmi'
 import { useTx } from '../lib/tx'
 import { useWallet } from '../lib/wallet'
 import { cls, num, shortAddr } from '../lib/format'
@@ -1100,6 +1103,14 @@ function BuybackSection() {
                 ? `Buying on PoolManager ${shortAddr(curPm!)}, fee ${curPool[2]}, tick spacing ${curPool[3]}, hooks ${shortAddr(curPool[4])}.`
                 : 'Where $LARRY trades. The bot\'s detect command prints these values from any $LARRY buy.'}
             </div>
+            <FindPool
+              onFound={(f) => {
+                setPm(f.poolManager)
+                setFee(String(f.key.fee))
+                setSpacing(String(f.key.tickSpacing))
+                setHooks(f.key.hooks)
+              }}
+            />
             <div className="form-grid">
               <Field label="PoolManager" value={pm} onChange={setPm} wide />
               <Field label="Fee" value={fee} onChange={setFee} />
@@ -1164,6 +1175,7 @@ function BuybackSection() {
           </div>
         </div>
       </div>
+      <BrowserKeeper bb={bb} keeper={k} v4Set={v4Set} />
       {!BUYBACK_CONTRACT && (
         <div className="callout">
           <b>Show it on the burn page</b>
@@ -1187,6 +1199,125 @@ function BuybackSection() {
       )}
       <TxNotice status={tx.status} />
     </Section>
+  )
+}
+
+function FindPool({ onFound }: { onFound: (f: Awaited<ReturnType<typeof findV4Pool>>) => void }) {
+  const pub = usePublicClient({ chainId: robinhood.id })
+  const [hash, setHash] = useState('')
+  const [msg, setMsg] = useState('')
+  const [busy, setBusy] = useState(false)
+  return (
+    <div className="find-pool">
+      <Field label="Find it from a $LARRY buy" suffix="paste the transaction hash" value={hash} onChange={setHash} wide />
+      <button
+        className="btn btn-ghost btn-sm"
+        disabled={busy || !/^0x[0-9a-fA-F]{64}$/.test(hash) || !pub}
+        onClick={async () => {
+          setBusy(true)
+          setMsg('Reading the transaction…')
+          try {
+            const f = await findV4Pool(pub as never, hash as `0x${string}`)
+            if (f.key.currency1.toLowerCase() !== LARRY_TOKEN.address.toLowerCase() || f.key.currency0 !== zeroAddress)
+              throw new Error('That swap is not in the ETH / $LARRY pool')
+            onFound(f)
+            setMsg(`Found: fee ${f.key.fee}, tick spacing ${f.key.tickSpacing}. Press Set pool.`)
+          } catch (e) {
+            setMsg((e as Error).message)
+          } finally {
+            setBusy(false)
+          }
+        }}
+      >
+        Find
+      </button>
+      {msg && <div className="muted small">{msg}</div>}
+    </div>
+  )
+}
+
+/** Runs the buybacks from this browser tab, so no server is needed. */
+function BrowserKeeper({ bb, keeper, v4Set }: { bb: Address; keeper?: Address; v4Set: boolean }) {
+  const tx = useTx()
+  const config = useConfig()
+  const { sendTransactionAsync } = useSendTransaction()
+  const [key, setKey] = useState(() => keeperKey())
+  const kAddr = key ? privateKeyToAccount(key).address : null
+  const isKeeper = !!kAddr && !!keeper && kAddr.toLowerCase() === keeper.toLowerCase()
+  const k = useBrowserKeeper(bb)
+  const [every, setEvery] = useState('10')
+  const [amount, setAmount] = useState('0.00001')
+  k.settings.current = { ...k.settings.current, everySec: Math.max(3, Number(every) || 10), amountEth: amount }
+
+  return (
+    <div className="keeper card">
+      <div className="keeper-head">
+        <div>
+          <b>Run buybacks from this browser</b>
+          <div className="muted small">No server needed. Buys keep going while this tab stays open; on a phone keep the screen on.</div>
+        </div>
+        {k.running && (
+          <span className="burn-live">
+            <i /> RUNNING
+          </span>
+        )}
+      </div>
+      {!kAddr ? (
+        <button className="btn btn-accent btn-sm" onClick={() => setKey(keeperKey(true))}>
+          Create a keeper key in this browser
+        </button>
+      ) : (
+        <>
+          <div className="muted small mono">Keeper {shortAddr(kAddr)}</div>
+          {!isKeeper && (
+            <button
+              className="btn btn-accent btn-sm"
+              disabled={tx.busy}
+              onClick={() =>
+                tx.run('This browser is the keeper', async () => {
+                  await tx.write('Set keeper', { address: bb, abi: LarryBuybackAbi, functionName: 'setKeeper', args: [kAddr] })
+                  tx.setStatus({ kind: 'pending', label: 'Send gas to the keeper: confirm in your wallet' })
+                  const hash = await sendTransactionAsync({ to: kAddr, value: parseEther('0.001'), chainId: robinhood.id })
+                  await waitForTransactionReceipt(config, { hash, chainId: robinhood.id })
+                })
+              }
+            >
+              Make this browser the keeper (and send it 0.001 ETH for gas)
+            </button>
+          )}
+          {isKeeper && (
+            <div className="form-grid">
+              <Field label="Every" suffix="seconds" value={every} onChange={setEvery} />
+              <Field label="Per buy" suffix="ETH" value={amount} onChange={setAmount} />
+            </div>
+          )}
+          {isKeeper && (
+            <button className={cls('btn btn-sm', k.running ? 'btn-ghost' : 'btn-accent')} disabled={!v4Set} onClick={() => k.setRunning(!k.running)}>
+              {!v4Set ? 'Set the V4 pool first' : k.running ? 'Stop' : 'Start buybacks'}
+            </button>
+          )}
+          {k.stats.buys > 0 && (
+            <div className="muted small">
+              This session: {k.stats.buys} buys, ~{Math.round(k.stats.burned).toLocaleString('en-US')} LARRY burned
+            </div>
+          )}
+          <div className="keeper-log">
+            {k.log.map((l) => (
+              <div key={l.t} className={cls('small mono', l.ok ? 'up' : 'muted')}>
+                {new Date(l.t).toLocaleTimeString()} {l.ok ? '🔥 ' : ''}
+                {l.text}{' '}
+                {l.hash && (
+                  <a className="link" href={`${ROBINHOOD_CHAIN.explorerUrl}/tx/${l.hash}`} target="_blank" rel="noreferrer">
+                    tx ↗
+                  </a>
+                )}
+              </div>
+            ))}
+          </div>
+        </>
+      )}
+      <TxNotice status={tx.status} />
+    </div>
   )
 }
 

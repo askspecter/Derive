@@ -636,3 +636,7 @@ button.link { background: none; border: 0; padding: 0; cursor: pointer; }
 .burn-bot { margin-top: 16px; display: flex; flex-wrap: wrap; justify-content: space-between; align-items: center; gap: 12px; }
 .burn-bot p { margin: 0; }
 .burn-bot .muted { max-width: 640px; margin-top: 6px; }
+.find-pool { display: grid; gap: 8px; margin: 10px 0; }
+.keeper { margin-top: 16px; display: grid; gap: 12px; background: var(--bg-2); }
+.keeper-head { display: flex; justify-content: space-between; align-items: flex-start; gap: 12px; }
+.keeper-log { display: grid; gap: 4px; max-height: 260px; overflow-y: auto; }

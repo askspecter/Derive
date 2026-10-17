@@ -258,6 +258,18 @@ test('contract: buys on a Uniswap V4 ETH pool and the PoolManager pays the dead 
   assert.match(stdout, /currency0 0x0{40} \(ETH\)/)
   assert.match(stdout, /fee 3000, tickSpacing 60, hooks 0x0{40}/)
 
+  // the admin page's pool finder (src/lib/buybackKeeper.ts) reads the same key from the transaction
+  const { build } = await import('../../node_modules/esbuild/lib/main.js')
+  const outfile = path.join(fs.mkdtempSync(path.join(os.tmpdir(), 'bk-')), 'k.mjs')
+  const stub = path.join(path.dirname(outfile), 'wagmi.mjs')
+  fs.writeFileSync(stub, 'export const usePublicClient = () => null')
+  await build({ entryPoints: [new URL('../../src/lib/buybackKeeper.ts', import.meta.url).pathname], bundle: true, format: 'esm', platform: 'node', outfile, alias: { wagmi: stub }, define: { 'import.meta.env': '{}' }, logLevel: 'error' })
+  const { findV4Pool } = await import(outfile)
+  const found = await findV4Pool(pub, hash)
+  assert.equal(found.poolManager.toLowerCase(), pm.toLowerCase())
+  assert.deepEqual({ ...found.key }, { ...found.key, currency0: key.currency0, fee: 3000, tickSpacing: 60, hooks: key.hooks })
+  assert.equal(found.key.currency1.toLowerCase(), LARRY.toLowerCase())
+
   // a minimum above what the pool gives reverts
   await reverts(pub.simulateContract({ account: BOT, address: v4bb, abi: app.LarryBuyback.abi, functionName: 'buyAndBurnV4', args: [parseEther('0.0001'), parseUnits('20000', 18)] }), 'TooLittleOut')
   await reverts(pub.simulateContract({ account: BOT, address: v4bb, abi: app.LarryBuyback.abi, functionName: 'buyAndBurnV4', args: [parseEther('0.002'), 0n] }), 'OverLimit')

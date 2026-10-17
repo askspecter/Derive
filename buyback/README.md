@@ -14,7 +14,20 @@ Two parts:
 - **`buyback/larry-buyback.mjs`**: the keeper bot. Every few seconds it quotes the buy (by simulating it) and calls
   the contract. The keeper wallet only pays gas.
 
-## Setup
+## No server: run it from the admin page
+
+On `app.larry.exchange/#/admin`, section *$LARRY buyback and burn*:
+
+1. **Uniswap V4 pool**: paste the hash of any $LARRY buy into *Find it from a $LARRY buy*, press Find, then Set pool.
+2. **Run buybacks from this browser**: create a keeper key, then *Make this browser the keeper* (one transaction to
+   set it, one to send it 0.001 ETH for gas).
+3. Set the interval and the ETH per buy, and press **Start buybacks**. Every buy shows in the log with its
+   transaction. It runs while the tab stays open; on a phone keep the screen on.
+
+The keeper key only lives in that browser and can only trigger buys within the contract's limits; the ETH budget
+stays in the contract.
+
+## Setup with a server
 
 1. **Deploy the contract.** On `app.larry.exchange/#/admin`, section *$LARRY buyback and burn*: enter the keeper
    wallet (a fresh wallet for the bot), the max per buy and per day in ETH, and press Deploy. Then **Fund** it
