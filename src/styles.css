@@ -643,3 +643,11 @@ button.link { background: none; border: 0; padding: 0; cursor: pointer; }
 .advanced { border-top: 1px solid var(--border); padding-top: 10px; }
 .advanced summary { cursor: pointer; padding: 6px 0; }
 .advanced[open] > .switch-row { margin-top: 10px; }
+
+/* LLP credit (Morpho) */
+.credit { margin-top: 40px; }
+.credit .section-head { margin-bottom: 16px; }
+.credit-stats { grid-template-columns: repeat(4, minmax(0, 1fr)); margin-bottom: 16px; }
+.credit-me { margin-top: 8px; }
+.credit-modes button { flex: 1 1 30%; padding: 7px 8px; }
+@media (max-width: 640px) { .credit-stats { grid-template-columns: repeat(2, minmax(0, 1fr)); } }

@@ -8,8 +8,9 @@ import { ADDRESSES, ADMIN, ARENA, DEFAULT_COLLATERAL, OPTIONS_LEGACY } from '../
 import { ROBINHOOD_CHAIN } from '../config/chains'
 import { AssetIcon } from '../components/AssetIcon'
 import { NeedWallet, TxNotice } from '../components/Status'
-import { LarryArenaAbi, LarryBuybackAbi, LarryOptionsAbi, LarryPerpsAbi, LarryPoolAbi, aggregatorAbi } from '../lib/abis'
-import { LarryArenaBytecode, LarryBuybackBytecode, LarryOptionsBytecode, LarryPerpsBytecode, LarryPoolBytecode } from '../contracts/bytecode'
+import { LarryArenaAbi, LarryBuybackAbi, LarryVaultOracleAbi, LarryOptionsAbi, LarryPerpsAbi, LarryPoolAbi, aggregatorAbi } from '../lib/abis'
+import { LarryArenaBytecode, LarryBuybackBytecode, LarryOptionsBytecode, LarryPerpsBytecode, LarryPoolBytecode, LarryVaultOracleBytecode } from '../contracts/bytecode'
+import { LLP_ORACLE, MORPHO, MorphoAbi, llpMarket } from '../config/credit'
 import { useProtocol, type OptionMarket, type PerpMarket } from '../lib/protocol'
 import { BUYBACK_CONTRACT, LARRY_POOL, LARRY_TOKEN } from '../config/token'
 import { findV4Pool, keeperKey, useBrowserKeeper } from '../lib/buybackKeeper'
@@ -124,6 +125,7 @@ export function Admin() {
               <ZeroDteSection deployer={deployer} />
               <ArenaSection />
               <BuybackSection />
+              <CreditSection />
               <MarketsSection />
               <ControlsSection />
               <LiquidationsSection />
@@ -1599,5 +1601,126 @@ function AcceptOwnership({ me }: { me: Address }) {
       </div>
       <TxNotice status={tx.status} />
     </div>
+  )
+}
+
+/** LLP credit on Morpho: deploy the LLP price oracle, then open the LLP / USDG market on Morpho Blue. */
+function CreditSection() {
+  const tx = useTx()
+  const config = useConfig()
+  const { deployContractAsync } = useDeployContract()
+  const A = ADDRESSES!
+  const storeKey = `larry:llp-oracle:${A.pool.toLowerCase()}`
+  const [fresh, setFresh] = useState<Address | null>(() => {
+    try {
+      const a = localStorage.getItem(storeKey)
+      return a && isAddress(a) ? getAddress(a) : null
+    } catch {
+      return null
+    }
+  })
+  const [copied, setCopied] = useState('')
+  const oracle = LLP_ORACLE ?? fresh
+  const m = llpMarket(oracle)
+  const q = useReadContracts({
+    allowFailure: true,
+    contracts: m
+      ? [
+          { address: MORPHO, abi: MorphoAbi, functionName: 'market', args: [m.id] },
+          { address: m.params.oracle, abi: LarryVaultOracleAbi, functionName: 'price' },
+        ]
+      : [],
+    query: { enabled: !!m, refetchInterval: 10_000 },
+  })
+  const mk = q.data?.[0]?.result as readonly bigint[] | undefined
+  const price = q.data?.[1]?.result as bigint | undefined
+  const created = !!mk && mk[4] > 0n
+  const envLine = `VITE_LLP_ORACLE=${oracle ?? ''}`
+  const copy = async (k: string, text: string) => {
+    try {
+      await navigator.clipboard.writeText(text)
+      setCopied(k)
+      setTimeout(() => setCopied(''), 1500)
+    } catch {}
+  }
+
+  return (
+    <Section
+      n="Credit"
+      title="LLP credit market (Morpho)"
+      hint="Lets LPs borrow USDG against their LLP on Morpho Blue, up to 62.5% of its value. Morpho holds the funds; Larry only provides the LLP price. Anyone can lend USDG to the market and earn the interest."
+    >
+      <div className="switches">
+        <div className="switch-row">
+          <div>
+            <b>1. LLP price oracle</b>
+            <div className="mono small muted">
+              {oracle ? `${shortAddr(oracle)} · 1 LLP = ${price === undefined ? '…' : num(Number(price) / 1e30, 4)} USDG` : 'Prices LLP at what it redeems for in the vault.'}
+            </div>
+          </div>
+          {!oracle && (
+            <button
+              className="btn btn-accent btn-sm"
+              disabled={tx.busy}
+              onClick={() =>
+                tx.run('Oracle deployed', async () => {
+                  tx.setStatus({ kind: 'pending', label: 'Confirm the deployment in your wallet' })
+                  const hash = await deployContractAsync({ chainId: robinhood.id, abi: LarryVaultOracleAbi, bytecode: LarryVaultOracleBytecode, args: [A.pool] })
+                  tx.setStatus({ kind: 'pending', label: 'Waiting for the block' })
+                  const r = await waitForTransactionReceipt(config, { hash, chainId: robinhood.id })
+                  if (!r.contractAddress) throw new Error('No contract address in the receipt')
+                  const a = getAddress(r.contractAddress)
+                  try {
+                    localStorage.setItem(storeKey, a)
+                  } catch {}
+                  setFresh(a)
+                })
+              }
+            >
+              Deploy
+            </button>
+          )}
+        </div>
+        {m && (
+          <div className="switch-row">
+            <div>
+              <b>2. Market on Morpho</b>
+              <div className="mono small muted">{created ? `Open · id ${m.id.slice(0, 10)}…` : 'LLP collateral, USDG loans, 62.5% LLTV'}</div>
+            </div>
+            {created ? (
+              <button className="btn btn-ghost btn-sm" onClick={() => copy('id', m.id)}>
+                {copied === 'id' ? 'Copied' : 'Copy id'}
+              </button>
+            ) : (
+              <button
+                className="btn btn-accent btn-sm"
+                disabled={tx.busy || !mk}
+                onClick={() => tx.run('Market created', () => tx.write('Create market', { address: MORPHO, abi: MorphoAbi, functionName: 'createMarket', args: [m.params] }))}
+              >
+                Create
+              </button>
+            )}
+          </div>
+        )}
+      </div>
+      {oracle && !LLP_ORACLE && (
+        <div className="callout">
+          <b>3. Show it on the site</b>
+          <div>
+            Set this in Vercel, Settings, Environment Variables, then redeploy. The Vault page then shows Borrow against your LLP.
+            <pre className="code">{envLine}</pre>
+            <button className="btn btn-ghost btn-sm" onClick={() => copy('env', envLine)}>
+              {copied === 'env' ? 'Copied' : 'Copy'}
+            </button>
+          </div>
+        </div>
+      )}
+      {created && (
+        <div className="muted small">
+          Market id <span className="mono">{m!.id}</span>. Lend USDG to it from the Vault page so borrowers have liquidity. Any Morpho app on Robinhood Chain,
+          EmpireX's Credit tab included, can list it with this id.
+        </div>
+      )}
+    </Section>
   )
 }

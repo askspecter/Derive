@@ -74,6 +74,14 @@ connected to the vault until they are all settled. The admin page then offers to
 Options with less than a day left carry an extra spread (`shortDatedSpreadBps`, 3% by default) on top of the
 market spread, set in **Controls**.
 
+### Opening LLP credit (Morpho)
+
+LPs can borrow USDG against their LLP on Morpho Blue (the lending protocol EmpireX's credit markets use).
+On `/#/admin`, the **LLP credit market** section deploys `LarryVaultOracle` (prices one LLP at what it
+redeems for in the vault), then creates the Morpho market: LLP collateral, USDG loans, 62.5% LLTV, the
+AdaptiveCurve rate model. Set `VITE_LLP_ORACLE=<oracle>` in Vercel and redeploy; the Vault page then shows
+"Borrow against your LLP" and a Lend tab. `test/fork/morpho-llp.mjs` runs the whole flow on a mainnet fork.
+
 ### Opening the Agent Arena
 
 The Arena page says "opens soon" until the site knows the arena contract. On `/#/admin`, the **Agent Arena**

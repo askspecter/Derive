@@ -3,6 +3,7 @@ import { useReadContracts } from 'wagmi'
 import { erc20Abi, formatUnits, parseUnits, zeroAddress, type Address } from 'viem'
 import { ADDRESSES } from '../config/protocol'
 import { NeedWallet, NotLive, TxNotice } from '../components/Status'
+import { LlpCredit } from '../components/LlpCredit'
 import { LarryPoolAbi } from '../lib/abis'
 import { useProtocol } from '../lib/protocol'
 import { useTx } from '../lib/tx'
@@ -57,6 +58,7 @@ export function Vaults() {
         </div>
         <VaultTicket />
       </div>
+      <LlpCredit />
     </div>
   )
 }
