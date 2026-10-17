@@ -14,3 +14,7 @@ export const BURN_ADDRESSES = [getAddress('0x00000000000000000000000000000000000
  * instead of a transfer to the dead address. Leave unset when every burn went to the dead address.
  */
 export const LARRY_INITIAL_SUPPLY = Number(import.meta.env.VITE_LARRY_INITIAL_SUPPLY ?? 0) || 0
+
+/** Wallet that runs the buyback and burn bot (buyback/), shown on the burn page so anyone can follow it. */
+const bb = (import.meta.env.VITE_LARRY_BUYBACK_WALLET as string | undefined) ?? ''
+export const BUYBACK_WALLET = /^0x[0-9a-fA-F]{40}$/.test(bb) ? getAddress(bb) : null

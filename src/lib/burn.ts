@@ -26,7 +26,7 @@ export function useBurnTotals() {
       { address: token, abi: erc20Abi, functionName: 'balanceOf', args: [BURN_ADDRESSES[0]], chainId: ROBINHOOD_CHAIN.id },
       { address: token, abi: erc20Abi, functionName: 'balanceOf', args: [BURN_ADDRESSES[1]], chainId: ROBINHOOD_CHAIN.id },
     ],
-    query: { refetchInterval: 12_000 },
+    query: { refetchInterval: 6_000 },
   })
   const r = q.data
   const ok = !!r && r.every((x) => x.status === 'success')
@@ -113,6 +113,6 @@ export function useBurnFeed(decimals: number) {
       }
     },
     enabled: !!client,
-    refetchInterval: 15_000,
+    refetchInterval: 8_000,
   })
 }

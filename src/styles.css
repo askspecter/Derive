@@ -633,3 +633,6 @@ button.link { background: none; border: 0; padding: 0; cursor: pointer; }
 .burn-note { margin: 12px 0 0; }
 .burn-ca { margin-top: 16px; display: grid; gap: 10px; }
 @media (max-width: 900px) { .burn { grid-template-columns: 1fr; } }
+.burn-bot { margin-top: 16px; display: flex; flex-wrap: wrap; justify-content: space-between; align-items: center; gap: 12px; }
+.burn-bot p { margin: 0; }
+.burn-bot .muted { max-width: 640px; margin-top: 6px; }

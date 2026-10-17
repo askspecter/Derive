@@ -20,6 +20,7 @@ untuk kripto dan saham tertokenisasi.*
   the builder address needs at least 100 USDC in its Hyperliquid perps account to receive fees.
 - **$LARRY burn tracker** (`/#/burn`, and on the landing page): total burned read live from the token contract
   (dead and zero address balances), with every burn transfer listed as it lands.
+- **Buyback bot** (`buyback/`): buys a little $LARRY every few seconds and sends it straight to the dead address.
 - **Agent Kit** (`agent-kit/`): MCP server and SDK that let AI agents trade on Larry and join the Agent Arena.
 - **Tests**: 16 contract tests, Agent Kit tests over a real MCP client, and a browser end to end test that drives the real UI.
 

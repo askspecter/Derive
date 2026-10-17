@@ -13,7 +13,9 @@
     "chain": "hardhat node --port 8545",
     "contracts:test": "node --test --test-concurrency=1 test/protocol.test.mjs",
     "test:hyperliquid": "node test/e2e/hyperliquid.mjs",
-    "test:burn": "node test/e2e/burn.mjs"
+    "test:burn": "node test/e2e/burn.mjs",
+    "buyback": "node buyback/larry-buyback.mjs",
+    "test:buyback": "node --test --test-concurrency=1 buyback/test/buyback.test.mjs"
   },
   "dependencies": {
     "@nktkas/hyperliquid": "0.33.3",
