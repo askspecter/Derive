@@ -70,6 +70,8 @@ export async function keeperTick(pub: PublicClient, wallet: WalletClient, accoun
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   let request: any
   if (s.route === 'pons') {
+    if (!(await pub.readContract({ ...c, functionName: 'allowedTarget', args: [LARRY_POOL] })))
+      return { ok: false, text: `The $LARRY pool ${LARRY_POOL.slice(0, 8)}… is not allowed on the contract yet. Press Allow the pool.` }
     // Quote: what the pool would pay the contract for this much ETH.
     const q = await pub.call({ account: contract, to: LARRY_POOL, value, data: encodeFunctionData({ abi: PONS, functionName: 'buy', args: [value, 0n, contract] }) })
     quote = hexToBigInt(q.data!)

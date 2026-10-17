@@ -20,7 +20,7 @@ On `app.larry.exchange/#/admin`, section *$LARRY buyback and burn*:
 
 1. **$LARRY pool**: press *Allow the pool*. $LARRY trades on its Pons V2 pool `0x4d17d7ea9f4975738d088e7ec6c15062a6215f16`
    (`buy(ethIn, minOut, to)` with native ETH); the contract buys there through `buyAndBurn` and burns all it receives.
-   (A Uniswap V4 pool can be set under *Advanced* instead.)
+   (A Uniswap V4 pool can be set under *Advanced* instead. `VITE_LARRY_DEX_POOL` overrides the pool address.)
 2. **Run buybacks from this browser**: create a keeper key, then *Make this browser the keeper* (one transaction to
    set it, one to send it 0.001 ETH for gas).
 3. Set the interval and the ETH per buy, and press **Start buybacks**. Every buy shows in the log with its
