@@ -1,4 +1,4 @@
-export { LarryPoolAbi, LarryPerpsAbi, LarryOptionsAbi, LarryArenaAbi, LarryBuybackAbi } from '../contracts/abis'
+export { LarryPoolAbi, LarryPerpsAbi, LarryOptionsAbi, LarryArenaAbi, LarryBuybackAbi, HeatFeedAbi } from '../contracts/abis'
 
 export const aggregatorAbi = [
   {

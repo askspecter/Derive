@@ -532,3 +532,37 @@ test('arena: agents join with a unique name and public limits that can only go d
   await send(admin, arena, app.LarryArena.abi, 'setJoinsPaused', [true])
   await reverts(send(lp, arena, app.LarryArena.abi, 'join', ['LP Agent', usd(5), usd(5)]), 'JoinsPaused')
 })
+
+// ------------------------------------------------------------------ heat
+
+test('heat: a HeatFeed lists as a perps market, longs win when whales buy, moves are capped', async () => {
+  const idx = (v) => parseUnits(String(v), 8)
+  const feed = await deploy(admin, app.HeatFeed, ['NVDA HEAT', keeper, 2000, idx(100)])
+  const H = (fn, args) => read(feed, app.HeatFeed.abi, fn, args)
+  assert.equal(await H('decimals'), 8)
+  assert.equal((await H('latestRoundData'))[1], idx(100))
+  const HEAT_MARKET = 30n
+  await send(admin, perps, app.LarryPerps.abi, 'setMarket', [HEAT_MARKET, { ...perpMarket(feed), maxLeverage: 5 }])
+  assert.equal(await read(perps, app.LarryPerps.abi, 'price', [HEAT_MARKET]), wad(100))
+
+  // only the updater posts, within range, at most 20% a step
+  await reverts(send(alice, feed, app.HeatFeed.abi, 'update', [idx(110)]), 'NotUpdater')
+  await reverts(send(keeper, feed, app.HeatFeed.abi, 'update', [idx(121)]), 'MoveTooLarge')
+  await reverts(send(admin, feed, app.HeatFeed.abi, 'setMaxMoveBps', [9000]), 'BadParams')
+
+  // long heat at 100 with 100 USDG, 450 size, whales pile in: 100 -> 120 -> 140
+  const before = await bal(alice)
+  await send(alice, perps, app.LarryPerps.abi, 'openPosition', [HEAT_MARKET, true, usd(100), usd(450), wad(101)])
+  await send(keeper, feed, app.HeatFeed.abi, 'update', [idx(120)])
+  await send(keeper, feed, app.HeatFeed.abi, 'update', [idx(140)])
+  assert.equal(await H('latestRound'), 3n)
+  const [id] = await posIdsOf(alice)
+  await send(alice, perps, app.LarryPerps.abi, 'closePosition', [id, wad(139)])
+  const gain = Number(formatUnits((await bal(alice)) - before, 6))
+  assert.ok(gain > 170 && gain < 180, `gain ${gain}`) // +40% on 450 size, minus fees
+
+  // the market halts when updates stop
+  await warp(3601)
+  await reverts(send(alice, perps, app.LarryPerps.abi, 'openPosition', [HEAT_MARKET, true, usd(100), usd(200), wad(150)]), 'StalePrice')
+  await assertSolvent()
+})

@@ -5051,3 +5051,449 @@ export const LarryBuybackAbi = [
     "type": "receive"
   }
 ] as const
+
+export const HeatFeedAbi = [
+  {
+    "inputs": [
+      {
+        "internalType": "string",
+        "name": "description_",
+        "type": "string"
+      },
+      {
+        "internalType": "address",
+        "name": "updater_",
+        "type": "address"
+      },
+      {
+        "internalType": "uint16",
+        "name": "maxMoveBps_",
+        "type": "uint16"
+      },
+      {
+        "internalType": "int256",
+        "name": "initial",
+        "type": "int256"
+      }
+    ],
+    "stateMutability": "nonpayable",
+    "type": "constructor"
+  },
+  {
+    "inputs": [],
+    "name": "BadParams",
+    "type": "error"
+  },
+  {
+    "inputs": [],
+    "name": "MoveTooLarge",
+    "type": "error"
+  },
+  {
+    "inputs": [],
+    "name": "NoData",
+    "type": "error"
+  },
+  {
+    "inputs": [],
+    "name": "NotUpdater",
+    "type": "error"
+  },
+  {
+    "inputs": [],
+    "name": "OutOfRange",
+    "type": "error"
+  },
+  {
+    "inputs": [
+      {
+        "internalType": "address",
+        "name": "owner",
+        "type": "address"
+      }
+    ],
+    "name": "OwnableInvalidOwner",
+    "type": "error"
+  },
+  {
+    "inputs": [
+      {
+        "internalType": "address",
+        "name": "account",
+        "type": "address"
+      }
+    ],
+    "name": "OwnableUnauthorizedAccount",
+    "type": "error"
+  },
+  {
+    "anonymous": false,
+    "inputs": [
+      {
+        "indexed": true,
+        "internalType": "int256",
+        "name": "current",
+        "type": "int256"
+      },
+      {
+        "indexed": true,
+        "internalType": "uint256",
+        "name": "roundId",
+        "type": "uint256"
+      },
+      {
+        "indexed": false,
+        "internalType": "uint256",
+        "name": "updatedAt",
+        "type": "uint256"
+      }
+    ],
+    "name": "AnswerUpdated",
+    "type": "event"
+  },
+  {
+    "anonymous": false,
+    "inputs": [
+      {
+        "indexed": false,
+        "internalType": "uint256",
+        "name": "bps",
+        "type": "uint256"
+      }
+    ],
+    "name": "MaxMoveSet",
+    "type": "event"
+  },
+  {
+    "anonymous": false,
+    "inputs": [
+      {
+        "indexed": true,
+        "internalType": "address",
+        "name": "previousOwner",
+        "type": "address"
+      },
+      {
+        "indexed": true,
+        "internalType": "address",
+        "name": "newOwner",
+        "type": "address"
+      }
+    ],
+    "name": "OwnershipTransferStarted",
+    "type": "event"
+  },
+  {
+    "anonymous": false,
+    "inputs": [
+      {
+        "indexed": true,
+        "internalType": "address",
+        "name": "previousOwner",
+        "type": "address"
+      },
+      {
+        "indexed": true,
+        "internalType": "address",
+        "name": "newOwner",
+        "type": "address"
+      }
+    ],
+    "name": "OwnershipTransferred",
+    "type": "event"
+  },
+  {
+    "anonymous": false,
+    "inputs": [
+      {
+        "indexed": false,
+        "internalType": "address",
+        "name": "updater",
+        "type": "address"
+      }
+    ],
+    "name": "UpdaterSet",
+    "type": "event"
+  },
+  {
+    "inputs": [],
+    "name": "MAX_ANSWER",
+    "outputs": [
+      {
+        "internalType": "int256",
+        "name": "",
+        "type": "int256"
+      }
+    ],
+    "stateMutability": "view",
+    "type": "function"
+  },
+  {
+    "inputs": [],
+    "name": "MIN_ANSWER",
+    "outputs": [
+      {
+        "internalType": "int256",
+        "name": "",
+        "type": "int256"
+      }
+    ],
+    "stateMutability": "view",
+    "type": "function"
+  },
+  {
+    "inputs": [],
+    "name": "acceptOwnership",
+    "outputs": [],
+    "stateMutability": "nonpayable",
+    "type": "function"
+  },
+  {
+    "inputs": [],
+    "name": "decimals",
+    "outputs": [
+      {
+        "internalType": "uint8",
+        "name": "",
+        "type": "uint8"
+      }
+    ],
+    "stateMutability": "view",
+    "type": "function"
+  },
+  {
+    "inputs": [],
+    "name": "description",
+    "outputs": [
+      {
+        "internalType": "string",
+        "name": "",
+        "type": "string"
+      }
+    ],
+    "stateMutability": "view",
+    "type": "function"
+  },
+  {
+    "inputs": [
+      {
+        "internalType": "uint80",
+        "name": "id",
+        "type": "uint80"
+      }
+    ],
+    "name": "getRoundData",
+    "outputs": [
+      {
+        "internalType": "uint80",
+        "name": "",
+        "type": "uint80"
+      },
+      {
+        "internalType": "int256",
+        "name": "",
+        "type": "int256"
+      },
+      {
+        "internalType": "uint256",
+        "name": "",
+        "type": "uint256"
+      },
+      {
+        "internalType": "uint256",
+        "name": "",
+        "type": "uint256"
+      },
+      {
+        "internalType": "uint80",
+        "name": "",
+        "type": "uint80"
+      }
+    ],
+    "stateMutability": "view",
+    "type": "function"
+  },
+  {
+    "inputs": [],
+    "name": "latestAnswer",
+    "outputs": [
+      {
+        "internalType": "int256",
+        "name": "",
+        "type": "int256"
+      }
+    ],
+    "stateMutability": "view",
+    "type": "function"
+  },
+  {
+    "inputs": [],
+    "name": "latestRound",
+    "outputs": [
+      {
+        "internalType": "uint80",
+        "name": "",
+        "type": "uint80"
+      }
+    ],
+    "stateMutability": "view",
+    "type": "function"
+  },
+  {
+    "inputs": [],
+    "name": "latestRoundData",
+    "outputs": [
+      {
+        "internalType": "uint80",
+        "name": "",
+        "type": "uint80"
+      },
+      {
+        "internalType": "int256",
+        "name": "",
+        "type": "int256"
+      },
+      {
+        "internalType": "uint256",
+        "name": "",
+        "type": "uint256"
+      },
+      {
+        "internalType": "uint256",
+        "name": "",
+        "type": "uint256"
+      },
+      {
+        "internalType": "uint80",
+        "name": "",
+        "type": "uint80"
+      }
+    ],
+    "stateMutability": "view",
+    "type": "function"
+  },
+  {
+    "inputs": [],
+    "name": "maxMoveBps",
+    "outputs": [
+      {
+        "internalType": "uint16",
+        "name": "",
+        "type": "uint16"
+      }
+    ],
+    "stateMutability": "view",
+    "type": "function"
+  },
+  {
+    "inputs": [],
+    "name": "owner",
+    "outputs": [
+      {
+        "internalType": "address",
+        "name": "",
+        "type": "address"
+      }
+    ],
+    "stateMutability": "view",
+    "type": "function"
+  },
+  {
+    "inputs": [],
+    "name": "pendingOwner",
+    "outputs": [
+      {
+        "internalType": "address",
+        "name": "",
+        "type": "address"
+      }
+    ],
+    "stateMutability": "view",
+    "type": "function"
+  },
+  {
+    "inputs": [],
+    "name": "renounceOwnership",
+    "outputs": [],
+    "stateMutability": "nonpayable",
+    "type": "function"
+  },
+  {
+    "inputs": [
+      {
+        "internalType": "uint16",
+        "name": "bps",
+        "type": "uint16"
+      }
+    ],
+    "name": "setMaxMoveBps",
+    "outputs": [],
+    "stateMutability": "nonpayable",
+    "type": "function"
+  },
+  {
+    "inputs": [
+      {
+        "internalType": "address",
+        "name": "u",
+        "type": "address"
+      }
+    ],
+    "name": "setUpdater",
+    "outputs": [],
+    "stateMutability": "nonpayable",
+    "type": "function"
+  },
+  {
+    "inputs": [
+      {
+        "internalType": "address",
+        "name": "newOwner",
+        "type": "address"
+      }
+    ],
+    "name": "transferOwnership",
+    "outputs": [],
+    "stateMutability": "nonpayable",
+    "type": "function"
+  },
+  {
+    "inputs": [
+      {
+        "internalType": "int256",
+        "name": "answer",
+        "type": "int256"
+      }
+    ],
+    "name": "update",
+    "outputs": [],
+    "stateMutability": "nonpayable",
+    "type": "function"
+  },
+  {
+    "inputs": [],
+    "name": "updater",
+    "outputs": [
+      {
+        "internalType": "address",
+        "name": "",
+        "type": "address"
+      }
+    ],
+    "stateMutability": "view",
+    "type": "function"
+  },
+  {
+    "inputs": [],
+    "name": "version",
+    "outputs": [
+      {
+        "internalType": "uint256",
+        "name": "",
+        "type": "uint256"
+      }
+    ],
+    "stateMutability": "view",
+    "type": "function"
+  }
+] as const
