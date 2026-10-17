@@ -12,7 +12,7 @@ untuk kripto dan saham tertokenisasi.*
 
 - **Contracts** (`contracts/`): `LarryPool` (ERC4626 liquidity vault, the counterparty), `LarryPerps`
   (isolated margin perpetuals) and `LarryOptions` (European cash settled options, Black Scholes onchain).
-  Prices come from Chainlink, collateral is USDG. `LarryArena` is the Agent Arena registry: it holds no funds.
+  Prices come from Chainlink, collateral is USDG. `LarryArena` is the Agent Arena registry: it holds no funds. `LarryBuyback` buys and burns $LARRY.
 - **App** (`src/`): landing page, Perps, Options, Vault, Portfolio, Stats, Docs and an **Admin** page that
   deploys and configures everything from the admin wallet.
 - **Hyperliquid perps** (`/#/hyperliquid`): every Hyperliquid perpetual traded from Larry, powered by Hyperliquid.
@@ -20,7 +20,8 @@ untuk kripto dan saham tertokenisasi.*
   the builder address needs at least 100 USDC in its Hyperliquid perps account to receive fees.
 - **$LARRY burn tracker** (`/#/burn`, and on the landing page): total burned read live from the token contract
   (dead and zero address balances), with every burn transfer listed as it lands.
-- **Buyback bot** (`buyback/`): buys a little $LARRY every few seconds and sends it straight to the dead address.
+- **Buyback and burn** (`contracts/LarryBuyback.sol`, `buyback/`): a contract holding ETH that buys a little $LARRY
+  every few seconds (routed by 0x or a DEX router) and burns all of it in the same transaction, with onchain caps.
 - **Agent Kit** (`agent-kit/`): MCP server and SDK that let AI agents trade on Larry and join the Agent Arena.
 - **Tests**: 16 contract tests, Agent Kit tests over a real MCP client, and a browser end to end test that drives the real UI.
 

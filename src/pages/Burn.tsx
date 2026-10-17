@@ -1,7 +1,10 @@
+import { useReadContracts } from 'wagmi'
+import { formatEther } from 'viem'
 import { BurnTracker } from '../components/BurnTracker'
 import { TokenCA } from '../components/TokenCA'
-import { BUYBACK_WALLET } from '../config/token'
+import { BUYBACK_CONTRACT } from '../config/token'
 import { ROBINHOOD_CHAIN } from '../config/chains'
+import { LarryBuybackAbi } from '../lib/abis'
 
 export function BurnPage() {
   return (
@@ -14,23 +17,55 @@ export function BurnPage() {
         </div>
       </div>
       <BurnTracker />
-      {BUYBACK_WALLET && (
-        <div className="card burn-bot">
-          <div>
-            <p className="eyebrow accent">Buyback bot</p>
-            <p className="muted small">
-              Every few seconds this wallet buys a small amount of $LARRY on the open market and the swap sends it straight to the dead address. Its whole history is public.
-            </p>
-          </div>
-          <a className="btn btn-ghost btn-sm mono" href={`${ROBINHOOD_CHAIN.explorerUrl}/address/${BUYBACK_WALLET}`} target="_blank" rel="noreferrer">
-            {BUYBACK_WALLET.slice(0, 8)}…{BUYBACK_WALLET.slice(-6)} ↗
-          </a>
-        </div>
-      )}
+      {BUYBACK_CONTRACT && <BuybackCard />}
       <div className="card token-card burn-ca">
         <p className="eyebrow accent">Official contract address</p>
         <TokenCA />
       </div>
+    </div>
+  )
+}
+
+/** Live stats of the LarryBuyback contract, read from the chain. */
+function BuybackCard() {
+  const c = { address: BUYBACK_CONTRACT!, abi: LarryBuybackAbi, chainId: ROBINHOOD_CHAIN.id } as const
+  const q = useReadContracts({
+    allowFailure: true,
+    contracts: [
+      { ...c, functionName: 'buys' },
+      { ...c, functionName: 'totalSpent' },
+      { ...c, functionName: 'maxPerDay' },
+      { ...c, functionName: 'paused' },
+    ],
+    query: { refetchInterval: 8_000 },
+  })
+  const [buys, spent, perDay, paused] = (q.data ?? []).map((r) => r.result) as [bigint?, bigint?, bigint?, boolean?]
+  const eth = (v?: bigint) => (v === undefined ? '…' : `${Number(formatEther(v)).toFixed(4)} ETH`)
+  return (
+    <div className="card burn-bot">
+      <div>
+        <p className="eyebrow accent">Buyback contract {paused ? '· paused' : ''}</p>
+        <p className="muted small">
+          This contract holds ETH and, every few seconds, buys a little $LARRY on the open market and sends all of it to the dead address in the same transaction. Its limits are enforced onchain.
+        </p>
+        <div className="burn-facts">
+          <div>
+            <span className="muted small">Buybacks</span>
+            <b className="mono">{buys === undefined ? '…' : buys.toLocaleString('en-US')}</b>
+          </div>
+          <div>
+            <span className="muted small">ETH spent</span>
+            <b className="mono">{eth(spent)}</b>
+          </div>
+          <div>
+            <span className="muted small">Daily limit</span>
+            <b className="mono">{eth(perDay)}</b>
+          </div>
+        </div>
+      </div>
+      <a className="btn btn-ghost btn-sm mono" href={`${ROBINHOOD_CHAIN.explorerUrl}/address/${BUYBACK_CONTRACT}`} target="_blank" rel="noreferrer">
+        {BUYBACK_CONTRACT!.slice(0, 8)}…{BUYBACK_CONTRACT!.slice(-6)} ↗
+      </a>
     </div>
   )
 }

@@ -1,16 +1,17 @@
 import { useEffect, useState, type ReactNode } from 'react'
-import { useBytecode, useConfig, useDeployContract, useReadContract, useReadContracts, useTransactionCount } from 'wagmi'
-import { waitForTransactionReceipt } from 'wagmi/actions'
-import { erc20Abi, formatUnits, getAddress, getContractAddress, isAddress, parseUnits, zeroAddress, type Address } from 'viem'
+import { useBytecode, useConfig, useDeployContract, useReadContract, useReadContracts, useSendTransaction, useTransactionCount } from 'wagmi'
+import { getBalance, waitForTransactionReceipt } from 'wagmi/actions'
+import { erc20Abi, formatEther, formatUnits, getAddress, parseEther, getContractAddress, isAddress, parseUnits, zeroAddress, type Address } from 'viem'
 import { robinhood } from '@reown/appkit/networks'
 import { ASSETS } from '../config/markets'
 import { ADDRESSES, ADMIN, ARENA, DEFAULT_COLLATERAL, OPTIONS_LEGACY } from '../config/protocol'
 import { ROBINHOOD_CHAIN } from '../config/chains'
 import { AssetIcon } from '../components/AssetIcon'
 import { NeedWallet, TxNotice } from '../components/Status'
-import { LarryArenaAbi, LarryOptionsAbi, LarryPerpsAbi, LarryPoolAbi, aggregatorAbi } from '../lib/abis'
-import { LarryArenaBytecode, LarryOptionsBytecode, LarryPerpsBytecode, LarryPoolBytecode } from '../contracts/bytecode'
+import { LarryArenaAbi, LarryBuybackAbi, LarryOptionsAbi, LarryPerpsAbi, LarryPoolAbi, aggregatorAbi } from '../lib/abis'
+import { LarryArenaBytecode, LarryBuybackBytecode, LarryOptionsBytecode, LarryPerpsBytecode, LarryPoolBytecode } from '../contracts/bytecode'
 import { useProtocol, type OptionMarket, type PerpMarket } from '../lib/protocol'
+import { BUYBACK_CONTRACT, LARRY_TOKEN } from '../config/token'
 import { useTx } from '../lib/tx'
 import { useWallet } from '../lib/wallet'
 import { cls, num, shortAddr } from '../lib/format'
@@ -119,6 +120,7 @@ export function Admin() {
             <>
               <ZeroDteSection deployer={deployer} />
               <ArenaSection />
+              <BuybackSection />
               <MarketsSection />
               <ControlsSection />
               <LiquidationsSection />
@@ -955,6 +957,215 @@ function ArenaSection() {
       )}
       <TxNotice status={tx.status} />
     </Section>
+  )
+}
+
+/** $LARRY buyback and burn: deploy the contract, fund it, allow the swap route, and run it. */
+function BuybackSection() {
+  const tx = useTx()
+  const config = useConfig()
+  const { deployContractAsync } = useDeployContract()
+  const { sendTransactionAsync } = useSendTransaction()
+  const storeKey = 'larry:buyback'
+  const [fresh, setFresh] = useState<Address | null>(() => {
+    try {
+      const a = localStorage.getItem(storeKey)
+      return a && isAddress(a) ? getAddress(a) : null
+    } catch {
+      return null
+    }
+  })
+  const bb = BUYBACK_CONTRACT ?? fresh
+  const [keeper, setKeeper] = useState('')
+  const [perBuy, setPerBuy] = useState('0.0001')
+  const [perDay, setPerDay] = useState('0.02')
+  const [fund, setFund] = useState('0.02')
+  const [target, setTarget] = useState('')
+  const [copied, setCopied] = useState(false)
+  const c = { address: bb ?? zeroAddress, abi: LarryBuybackAbi } as const
+  const q = useReadContracts({
+    allowFailure: true,
+    contracts: [
+      { ...c, functionName: 'keeper' },
+      { ...c, functionName: 'maxPerBuy' },
+      { ...c, functionName: 'maxPerDay' },
+      { ...c, functionName: 'leftToday' },
+      { ...c, functionName: 'paused' },
+      { ...c, functionName: 'buys' },
+      { ...c, functionName: 'totalBurned' },
+    ],
+    query: { enabled: !!bb, refetchInterval: 8000 },
+  })
+  const bal = useReadContracts({
+    allowFailure: true,
+    contracts: [{ ...c, functionName: 'allowedTarget', args: [isAddress(target) ? getAddress(target) : zeroAddress] }],
+    query: { enabled: !!bb && isAddress(target) },
+  })
+  const [k, mb, md, left, paused, buys, burned] = (q.data ?? []).map((r) => r.result) as [Address?, bigint?, bigint?, bigint?, boolean?, bigint?, bigint?]
+  const targetAllowed = bal.data?.[0]?.result === true
+  const envLine = `VITE_LARRY_BUYBACK=${bb ?? ''}`
+  const num6 = (v?: bigint) => (v === undefined ? '…' : Number(formatEther(v)).toFixed(6))
+  const eth = (v: string) => {
+    try {
+      return parseEther(v)
+    } catch {
+      return 0n
+    }
+  }
+
+  if (!bb) {
+    return (
+      <Section n="Burn" title="$LARRY buyback and burn" hint="A contract that holds ETH, buys $LARRY in small amounts and sends every token it buys to the dead address. A keeper bot (buyback/ in the repo) triggers each buy.">
+        <div className="form-grid">
+          <Field label="Keeper wallet" suffix="the bot's address" value={keeper} onChange={setKeeper} wide />
+          <Field label="Max per buy" suffix="ETH" value={perBuy} onChange={setPerBuy} />
+          <Field label="Max per day" suffix="ETH" value={perDay} onChange={setPerDay} />
+        </div>
+        <button
+          className="btn btn-accent btn-sm"
+          disabled={tx.busy || !isAddress(keeper) || eth(perBuy) === 0n || eth(perDay) < eth(perBuy)}
+          onClick={() =>
+            tx.run('Buyback contract deployed', async () => {
+              tx.setStatus({ kind: 'pending', label: 'Confirm the deployment in your wallet' })
+              const hash = await deployContractAsync({ chainId: robinhood.id, abi: LarryBuybackAbi, bytecode: LarryBuybackBytecode, args: [LARRY_TOKEN.address, getAddress(keeper), eth(perBuy), eth(perDay)] })
+              tx.setStatus({ kind: 'pending', label: 'Waiting for the block' })
+              const r = await waitForTransactionReceipt(config, { hash, chainId: robinhood.id })
+              if (!r.contractAddress) throw new Error('No contract address in the receipt')
+              const a = getAddress(r.contractAddress)
+              try {
+                localStorage.setItem(storeKey, a)
+              } catch {}
+              setFresh(a)
+            })
+          }
+        >
+          Deploy
+        </button>
+        <TxNotice status={tx.status} />
+      </Section>
+    )
+  }
+
+  return (
+    <Section n="Burn" title="$LARRY buyback and burn" hint={`Contract ${shortAddr(bb)}. The keeper bot triggers each buy; every $LARRY bought goes to the dead address in the same transaction.`}>
+      <div className="admin-status">
+        <div>
+          <span className="eyebrow">Buybacks</span>
+          <b className="mono">{buys?.toString() ?? '…'}</b>
+        </div>
+        <div>
+          <span className="eyebrow">Burned</span>
+          <b className="mono">{burned === undefined ? '…' : Math.round(Number(formatEther(burned))).toLocaleString('en-US')} LARRY</b>
+        </div>
+        <div>
+          <span className="eyebrow">Left today</span>
+          <b className="mono">{num6(left)} of {num6(md)} ETH</b>
+        </div>
+        <div>
+          <span className="eyebrow">Keeper</span>
+          <b className="mono">{k ? shortAddr(k) : '…'}</b>
+        </div>
+      </div>
+      <div className="switches">
+        <div className="switch-row">
+          <Field label="Send ETH to the contract" suffix="ETH" value={fund} onChange={setFund} />
+          <button
+            className="btn btn-accent btn-sm"
+            disabled={tx.busy || eth(fund) === 0n}
+            onClick={() =>
+              tx.run('Buyback funded', async () => {
+                tx.setStatus({ kind: 'pending', label: 'Confirm in your wallet' })
+                const hash = await sendTransactionAsync({ to: bb, value: eth(fund), chainId: robinhood.id })
+                await waitForTransactionReceipt(config, { hash, chainId: robinhood.id })
+              })
+            }
+          >
+            Fund
+          </button>
+        </div>
+        <div className="switch-row">
+          <Field label="Allow a swap route" suffix="the target the bot's check command prints" value={target} onChange={setTarget} wide />
+          <button
+            className="btn btn-accent btn-sm"
+            disabled={tx.busy || !isAddress(target) || targetAllowed}
+            onClick={() => tx.run('Route allowed', () => tx.write('Allow route', { address: bb, abi: LarryBuybackAbi, functionName: 'setTarget', args: [getAddress(target), true] }))}
+          >
+            {targetAllowed ? 'Allowed' : 'Allow'}
+          </button>
+        </div>
+        <div className="switch-row">
+          <div className="form-grid">
+            <Field label="Max per buy" suffix={`ETH, now ${num6(mb)}`} value={perBuy} onChange={setPerBuy} />
+            <Field label="Max per day" suffix={`ETH, now ${num6(md)}`} value={perDay} onChange={setPerDay} />
+          </div>
+          <button
+            className="btn btn-ghost btn-sm"
+            disabled={tx.busy || eth(perBuy) === 0n || eth(perDay) < eth(perBuy)}
+            onClick={() => tx.run('Limits updated', () => tx.write('Buyback limits', { address: bb, abi: LarryBuybackAbi, functionName: 'setLimits', args: [eth(perBuy), eth(perDay)] }))}
+          >
+            Set limits
+          </button>
+        </div>
+        <div className="switch-row">
+          <div>
+            <b>Buybacks</b>
+            <div className="muted small">Pausing stops the bot at once. Withdraw takes all unspent ETH back to this wallet.</div>
+          </div>
+          <div className="row-gap">
+            <button
+              className={cls('btn btn-sm', paused ? 'btn-accent' : 'btn-ghost')}
+              disabled={tx.busy || paused === undefined}
+              onClick={() => tx.run(paused ? 'Buybacks resumed' : 'Buybacks paused', () => tx.write('Buyback pause', { address: bb, abi: LarryBuybackAbi, functionName: 'setPaused', args: [!paused] }))}
+            >
+              {paused ? 'Paused, resume' : 'Pause'}
+            </button>
+            <WithdrawAll bb={bb} />
+          </div>
+        </div>
+      </div>
+      {!BUYBACK_CONTRACT && (
+        <div className="callout">
+          <b>Show it on the burn page</b>
+          <div>
+            Set this in Vercel and redeploy, then put the same address in the bot's BUYBACK_CONTRACT.
+            <pre className="code">{envLine}</pre>
+            <button
+              className="btn btn-ghost btn-sm"
+              onClick={async () => {
+                try {
+                  await navigator.clipboard.writeText(envLine)
+                  setCopied(true)
+                  setTimeout(() => setCopied(false), 1500)
+                } catch {}
+              }}
+            >
+              {copied ? 'Copied' : 'Copy'}
+            </button>
+          </div>
+        </div>
+      )}
+      <TxNotice status={tx.status} />
+    </Section>
+  )
+}
+
+function WithdrawAll({ bb }: { bb: Address }) {
+  const tx = useTx()
+  const w = useWallet()
+  const config = useConfig()
+  return (
+    <button
+      className="btn btn-ghost btn-sm"
+      disabled={tx.busy || !w.address}
+      onClick={() =>
+        tx.run('ETH withdrawn', async () => {
+          const b = await getBalance(config, { address: bb, chainId: robinhood.id })
+          await tx.write('Withdraw', { address: bb, abi: LarryBuybackAbi, functionName: 'withdraw', args: [getAddress(w.address!), b.value] })
+        })
+      }
+    >
+      Withdraw ETH
+    </button>
   )
 }
 

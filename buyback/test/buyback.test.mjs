@@ -7,8 +7,9 @@ import fs from 'node:fs'
 import os from 'node:os'
 import path from 'node:path'
 import { execFile } from 'node:child_process'
+import httpServer from 'node:http'
 import { promisify } from 'node:util'
-import { createPublicClient, createWalletClient, createTestClient, defineChain, http, parseEther, parseUnits, maxUint256, formatUnits, encodePacked } from 'viem'
+import { createPublicClient, createWalletClient, createTestClient, defineChain, http, parseEther, parseUnits, maxUint256, formatUnits, encodeFunctionData } from 'viem'
 
 const RPC = 'http://127.0.0.1:8545'
 const LARRY = '0x72587018a341d5B668C0479e73b2Ee1c8D06f4f4'
@@ -17,6 +18,7 @@ const BOT_KEY = '0x5de4111afa1a4b94908f83103eb1f1706367c2e68ca870fc3fb9a804cdab3
 const chain = defineChain({ id: 4663, name: 'Local', nativeCurrency: { name: 'Ether', symbol: 'ETH', decimals: 18 }, rpcUrls: { default: { http: [RPC] } } })
 const pub = createPublicClient({ chain, transport: http(RPC) })
 const tc = createTestClient({ chain, mode: 'hardhat', transport: http(RPC) })
+const app = JSON.parse(fs.readFileSync(new URL('../../src/contracts/artifacts.json', import.meta.url)))
 const mocks = JSON.parse(fs.readFileSync(new URL('../../test/artifacts/mocks.json', import.meta.url)))
 const U = process.env.UNISWAP_DIR
 const art = (p) => JSON.parse(fs.readFileSync(path.join(U, 'node_modules/@uniswap', p)))
@@ -121,4 +123,99 @@ test('dry run sends nothing; check prints a quote', async () => {
   assert.equal(await dead(), before)
   const { stdout } = await sh(process.execPath, [bot, 'check'], { env: { PATH: process.env.PATH, BUYBACK_RPC_URL: RPC, BUYBACK_ROUTER: v2router, BUYBACK_AMOUNT: '0.00001' } })
   assert.match(stdout, /buys about 99\d LARRY/)
+})
+
+// ------------------------------------------------------------ LarryBuyback contract
+
+const BOT = '0x3C44CdDdB6a900fa2b585dd299e03d12FA4293BC'
+const B = (fn, args = []) => pub.readContract({ address: bb, abi: app.LarryBuyback.abi, functionName: fn, args })
+let bb
+async function reverts(p, name) {
+  await assert.rejects(p, (e) => (String(e.shortMessage ?? '') + String(e.message ?? '')).includes(name) || assert.fail(`expected ${name}: ${e.shortMessage}`))
+}
+
+test('contract: deploy, fund, and only the owner configures it', async () => {
+  bb = await deploy(app.LarryBuyback, [LARRY, BOT, parseEther('0.001'), parseEther('0.003')])
+  await w.sendTransaction({ to: bb, value: parseEther('0.01') })
+  await pub.waitForTransactionReceipt({ hash: await w.sendTransaction({ to: bb, value: 0n }) })
+  await reverts(send({ address: bb, abi: app.LarryBuyback.abi, functionName: 'setTarget', args: [LARRY, true] }), 'BadParams')
+  await send({ address: bb, abi: app.LarryBuyback.abi, functionName: 'setTarget', args: [v2router, true] })
+  const bot = createWalletClient({ account: BOT, chain, transport: http(RPC) })
+  await reverts(pub.simulateContract({ account: BOT, address: bb, abi: app.LarryBuyback.abi, functionName: 'setTarget', args: [BOT, true] }), 'OwnableUnauthorizedAccount')
+  assert.equal(await pub.getBalance({ address: bb }), parseEther('0.01'))
+  assert.ok(bot)
+})
+
+test('contract: the bot buys through a router and every token goes to the dead address', async () => {
+  const before = await dead()
+  const { out, state } = await run({ BUYBACK_CONTRACT: bb, BUYBACK_ROUTE: 'v2', BUYBACK_ROUTER: v2router, BUYBACK_AMOUNT: '0.0001', BUYBACK_MAX_RUNS: '2' })
+  assert.equal((out.match(/bought and burned/g) ?? []).length, 2, out)
+  const burned = (await dead()) - before
+  assert.ok(burned > 19000 && burned < 20000, `burned ${burned}`)
+  assert.equal(await pub.readContract({ address: LARRY, abi: mocks.MockERC20.abi, functionName: 'balanceOf', args: [bb] }), 0n)
+  assert.equal(await B('buys'), 2n)
+  assert.equal(await B('totalSpent'), parseEther('0.0002'))
+  assert.equal(state.buys, 2)
+  assert.equal(await pub.getBalance({ address: bb }), parseEther('0.0098'))
+})
+
+test('contract: routes through the 0x API, with the contract as taker', async () => {
+  const seen = []
+  const srv = httpServer.createServer(async (req, res) => {
+    const u = new URL(req.url, 'http://x')
+    seen.push({ path: u.pathname, q: Object.fromEntries(u.searchParams), key: req.headers['0x-api-key'], version: req.headers['0x-version'] })
+    const amount = BigInt(u.searchParams.get('sellAmount'))
+    const outs = await pub.readContract({ address: v2router, abi: art('v2-periphery/build/UniswapV2Router02.json').abi, functionName: 'getAmountsOut', args: [amount, [weth, LARRY]] })
+    const minOut = (outs[1] * 99n) / 100n
+    const data = encodeFunctionData({ abi: art('v2-periphery/build/UniswapV2Router02.json').abi, functionName: 'swapExactETHForTokensSupportingFeeOnTransferTokens', args: [minOut, [weth, LARRY], u.searchParams.get('taker'), 9999999999n] })
+    res.setHeader('content-type', 'application/json')
+    res.end(JSON.stringify({ liquidityAvailable: true, buyAmount: outs[1].toString(), minBuyAmount: minOut.toString(), transaction: { to: v2router, data, value: amount.toString(), gas: '300000' } }))
+  })
+  await new Promise((r) => srv.listen(0, r))
+  try {
+    const before = await dead()
+    const { out } = await run({ BUYBACK_CONTRACT: bb, BUYBACK_ROUTE: '0x', BUYBACK_0X_API_KEY: 'test-key', BUYBACK_0X_URL: `http://127.0.0.1:${srv.address().port}`, BUYBACK_AMOUNT: '0.0001', BUYBACK_MAX_RUNS: '2' })
+    assert.equal((out.match(/bought and burned/g) ?? []).length, 2, out)
+    assert.ok((await dead()) - before > 19000)
+    assert.equal(seen[0].path, '/swap/allowance-holder/quote')
+    assert.equal(seen[0].q.taker.toLowerCase(), bb.toLowerCase())
+    assert.equal(seen[0].q.buyToken.toLowerCase(), LARRY.toLowerCase())
+    assert.equal(seen[0].q.chainId, '4663')
+    assert.equal(seen[0].key, 'test-key')
+    assert.equal(seen[0].version, 'v2')
+  } finally {
+    srv.close()
+  }
+})
+
+test('contract: enforces its caps, the minimum output and the target list onchain', async () => {
+  const V2 = art('v2-periphery/build/UniswapV2Router02.json').abi
+  const swap = (to) => encodeFunctionData({ abi: V2, functionName: 'swapExactETHForTokensSupportingFeeOnTransferTokens', args: [0n, [weth, LARRY], to, 9999999999n] })
+  const sim = (args, account = BOT) => pub.simulateContract({ account, address: bb, abi: app.LarryBuyback.abi, functionName: 'buyAndBurn', args })
+  await reverts(sim([v2router, swap(bb), parseEther('0.002'), 0n]), 'OverLimit') // above max per buy
+  await reverts(sim([v2router, swap(bb), parseEther('0.0001'), parseUnits('99999999', 18)]), 'TooLittleOut')
+  await reverts(sim([v2router, swap(BOT), parseEther('0.0001'), 0n]), 'TooLittleOut') // swap paying someone else gets nothing burned
+  await reverts(sim([weth, '0x', parseEther('0.0001'), 0n]), 'TargetNotAllowed')
+  await reverts(sim([v2router, swap(bb), parseEther('0.0001'), 0n], owner.slice(0, 2) + '1'.repeat(40)), 'NotKeeper')
+  // daily cap: 0.0004 spent of 0.003, three more at 0.001 would pass it
+  const bot = createWalletClient({ account: BOT, chain, transport: http(RPC) })
+  for (let i = 0; i < 2; i++) await pub.waitForTransactionReceipt({ hash: await bot.writeContract({ address: bb, abi: app.LarryBuyback.abi, functionName: 'buyAndBurn', args: [v2router, swap(bb), parseEther('0.001'), 1n] }) })
+  await reverts(sim([v2router, swap(bb), parseEther('0.001'), 1n]), 'OverLimit')
+  assert.equal(await B('leftToday'), parseEther('0.0006'))
+  await tc.increaseTime({ seconds: 86_400 })
+  await tc.mine({ blocks: 1 })
+  assert.equal(await B('leftToday'), parseEther('0.003'))
+})
+
+test('contract: anyone burns stray LARRY, the owner pauses and withdraws', async () => {
+  await send({ address: LARRY, abi: mocks.MockERC20.abi, functionName: 'transfer', args: [bb, parseUnits('500', 18)] })
+  const before = await dead()
+  const bot = createWalletClient({ account: BOT, chain, transport: http(RPC) })
+  await pub.waitForTransactionReceipt({ hash: await bot.writeContract({ address: bb, abi: app.LarryBuyback.abi, functionName: 'burnHeld' }) })
+  assert.equal((await dead()) - before, 500)
+  await send({ address: bb, abi: app.LarryBuyback.abi, functionName: 'setPaused', args: [true] })
+  await reverts(pub.simulateContract({ account: BOT, address: bb, abi: app.LarryBuyback.abi, functionName: 'buyAndBurn', args: [v2router, '0x', 1n, 0n] }), 'Paused')
+  const held = await pub.getBalance({ address: bb })
+  await send({ address: bb, abi: app.LarryBuyback.abi, functionName: 'withdraw', args: [owner, held] })
+  assert.equal(await pub.getBalance({ address: bb }), 0n)
 })

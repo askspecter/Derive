@@ -1,32 +1,35 @@
-# $LARRY buyback and burn bot
+# $LARRY buyback and burn
 
-Every few seconds the bot buys a small amount of $LARRY on the open market. The swap delivers the tokens
-straight to `0x000000000000000000000000000000000000dEaD`, so each buyback is also a burn, in one transaction.
-Each one shows on the explorer and on the burn tracker at `larry.exchange/#/burn`.
+Every few seconds a small amount of $LARRY is bought on the open market and sent to
+`0x000000000000000000000000000000000000dEaD` in the same transaction. Each one shows on the explorer and on the
+burn tracker at `larry.exchange/#/burn`.
 
-## Safety
+Two parts:
 
-- Run it from **a fresh wallet that holds only the buyback budget** plus a little ETH for gas.
-- `BUYBACK_MAX_PER_DAY` caps spending per UTC day. The bot pauses when it is reached and resumes the next day.
-- Every swap sets a minimum output from a fresh quote (`BUYBACK_SLIPPAGE_BPS`, 3% by default) and is simulated before it is sent.
-- The bot stops buying when the wallet's ETH falls below `BUYBACK_MIN_GAS_ETH`.
-- Publish the wallet: set `VITE_LARRY_BUYBACK_WALLET` in Vercel and the burn page links to it.
+- **`contracts/LarryBuyback.sol`**: holds the ETH budget. On each trigger it swaps through an allowed route,
+  checks it received at least the minimum $LARRY, and sends **all** of its $LARRY to the dead address. Caps per
+  buy and per day are enforced onchain, it only ever spends ETH (it never approves tokens), and the owner can
+  pause it or withdraw the ETH at any time. Anyone can burn $LARRY that lands in it.
+- **`buyback/larry-buyback.mjs`**: the keeper bot. Every few seconds it gets a quote (0x API, or a V2 or V3
+  router), and calls the contract. The keeper wallet only pays gas.
 
 ## Setup
 
-1. Find the DEX. Take any $LARRY buy transaction from the explorer and run:
+1. **Deploy the contract.** On `app.larry.exchange/#/admin`, section *$LARRY buyback and burn*: enter the keeper
+   wallet (a fresh wallet for the bot), the max per buy and per day in ETH, and press Deploy. Then **Fund** it
+   with the ETH budget.
+2. **Get a 0x API key** (free) at dashboard.0x.org. 0x already routes $LARRY trades on Robinhood Chain, so it finds
+   the pool by itself.
+3. **Configure the bot.** `cp buyback/.env.example buyback/.env` and fill in `BUYBACK_PRIVATE_KEY` (the keeper),
+   `BUYBACK_CONTRACT` and `BUYBACK_0X_API_KEY`. Send the keeper a little ETH for gas.
+4. **Check.** `node buyback/larry-buyback.mjs check` prints the contract, its budget, a live quote and the
+   **target** 0x will call. Paste that target into *Allow a swap route* on the admin page and press Allow.
+5. **Try a dry run**, then start it:
    ```bash
-   node buyback/larry-buyback.mjs detect 0x<txhash>
+   BUYBACK_DRY_RUN=1 node buyback/larry-buyback.mjs run
+   node buyback/larry-buyback.mjs run
    ```
-   It prints whether the pool is Uniswap V2 or V3 style, the pool and its factory. Set `BUYBACK_DEX` and
-   `BUYBACK_ROUTER` (and `BUYBACK_QUOTER` for V3) from the DEX docs.
-2. `cp buyback/.env.example buyback/.env` and fill it in.
-3. Check everything without sending anything:
-   ```bash
-   node buyback/larry-buyback.mjs check
-   ```
-   It shows the route, the wallet balances and how much $LARRY one buy gets right now.
-4. Try `BUYBACK_DRY_RUN=1 node buyback/larry-buyback.mjs run` for a minute, then run it for real.
+6. Set `VITE_LARRY_BUYBACK=<contract>` in Vercel so the burn page shows the contract's live stats.
 
 ## Keep it running
 
@@ -38,18 +41,24 @@ cp buyback/.env.example buyback/.env   # fill in
 npm i -g pm2
 pm2 start buyback/larry-buyback.mjs --name larry-buyback -- run
 pm2 save && pm2 startup                # restart after reboots
-pm2 logs larry-buyback                 # watch the burns
+pm2 logs larry-buyback                 # each line is one burn with its explorer link
 ```
 
-Each line of the log is one burn with its explorer link. `pm2 stop larry-buyback` stops it.
+`pm2 stop larry-buyback` stops the bot; *Pause* on the admin page stops the contract itself.
 
 ## Costs
 
-At one buy every 10 seconds the bot sends up to 8,640 transactions a day. Each pays gas and the pool fee
-(often 0.3%), so tiny buys lose a share of the budget to fees. Watch the first hour of logs before raising the
-pace or the budget.
+At one buy every 10 seconds there are up to 8,640 buys a day. Gas on Robinhood Chain is tiny, but each swap pays
+the pool fee and any 0x fee, so very small buys lose a share to fees. The contract's daily cap is the real limit:
+the bot pauses when it is reached and resumes the next UTC day.
+
+## Without a contract
+
+The bot can also swap from its own wallet straight to the dead address on a V2 or V3 router (`BUYBACK_ROUTE=v2`,
+`BUYBACK_ROUTER=...`, no `BUYBACK_CONTRACT`), paying ETH or a token. `detect <txhash>` inspects a $LARRY buy to
+find which pool it used.
 
 ## Tests
 
-`buyback/test/buyback.test.mjs` runs the bot against real Uniswap V2 and V3 contracts on a local chain
-(ETH and USDG payments, the daily cap, V3 with the quoter, dry run).
+`buyback/test/buyback.test.mjs` runs the contract and the bot against real Uniswap V2 and V3 contracts on a local
+chain, including the 0x route against a mock 0x API: caps, minimum output, allowed targets, pause, withdraw.

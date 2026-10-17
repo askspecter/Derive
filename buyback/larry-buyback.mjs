@@ -1,8 +1,12 @@
 #!/usr/bin/env node
-// $LARRY buyback and burn bot. Every few seconds it buys a small amount of $LARRY on a DEX and has the
-// swap deliver the tokens straight to the dead address, so every buyback is also a burn, in one
-// transaction. Spending is capped per buy and per day, and every swap has a minimum output so a
-// moved price can't make it overpay.
+// $LARRY buyback and burn bot. Every few seconds it buys a small amount of $LARRY and burns it.
+//
+// With BUYBACK_CONTRACT set (recommended) the ETH sits in the LarryBuyback contract: the bot only signs
+// the trigger and pays gas, the contract swaps, checks the minimum output, enforces its own per buy and
+// daily caps, and sends every $LARRY it bought to the dead address. Routing goes through the 0x API
+// (BUYBACK_ROUTE=0x, finds the best pool on its own) or a Uniswap V2 or V3 style router.
+// Without a contract the bot's own wallet swaps on a V2 or V3 router with the dead address as recipient.
+// Every swap has a minimum output from a fresh quote, so a moved price can't make it overpay.
 //
 //   node buyback/larry-buyback.mjs run              start the loop (needs BUYBACK_PRIVATE_KEY)
 //   node buyback/larry-buyback.mjs check            show the setup, balances and a quote, send nothing
@@ -14,6 +18,8 @@ import path from 'node:path'
 import {
   createPublicClient,
   createWalletClient,
+  decodeEventLog,
+  encodeFunctionData,
   defineChain,
   erc20Abi,
   formatEther,
@@ -52,7 +58,10 @@ const cfg = {
   explorer: env.BUYBACK_EXPLORER || 'https://robinhoodchain.blockscout.com',
   key: env.BUYBACK_PRIVATE_KEY,
   larry: addr(env.LARRY_TOKEN, 'LARRY_TOKEN', '0x72587018a341d5B668C0479e73b2Ee1c8D06f4f4'),
-  dex: (env.BUYBACK_DEX || 'v2').toLowerCase(), // v2 or v3
+  contract: addr(env.BUYBACK_CONTRACT, 'BUYBACK_CONTRACT'),
+  dex: (env.BUYBACK_ROUTE || env.BUYBACK_DEX || (env.BUYBACK_CONTRACT ? '0x' : 'v2')).toLowerCase(), // 0x, v2 or v3
+  zeroxKey: env.BUYBACK_0X_API_KEY,
+  zeroxUrl: env.BUYBACK_0X_URL || 'https://api.0x.org',
   router: addr(env.BUYBACK_ROUTER, 'BUYBACK_ROUTER'),
   quoter: addr(env.BUYBACK_QUOTER, 'BUYBACK_QUOTER'), // v3 only, QuoterV2
   fee: Number(env.BUYBACK_V3_FEE || 3000), // v3 pool fee tier
@@ -97,6 +106,19 @@ const V3_QUOTER = parseAbi([
   'function quoteExactInputSingle(QuoteExactInputSingleParams params) returns (uint256 amountOut, uint160 sqrtPriceX96After, uint32 initializedTicksCrossed, uint256 gasEstimate)',
 ])
 
+const BUYBACK = parseAbi([
+  'function buyAndBurn(address target, bytes data, uint256 value, uint256 minOut)',
+  'function leftToday() view returns (uint256)',
+  'function maxPerBuy() view returns (uint256)',
+  'function keeper() view returns (address)',
+  'function paused() view returns (bool)',
+  'function allowedTarget(address) view returns (bool)',
+  'function totalBurned() view returns (uint256)',
+  'function buys() view returns (uint256)',
+  'event BoughtAndBurned(address indexed target, uint256 ethSpent, uint256 larryBurned)',
+])
+const NATIVE = '0xEeeeeEeeeEeEeeEeEeEeeEEEeeeeEeeeeeeeEEeE'
+
 const log = (...a) => console.log(new Date().toISOString().replace('T', ' ').slice(0, 19), ...a)
 
 // ------------------------------------------------------------ helpers
@@ -104,10 +126,15 @@ const log = (...a) => console.log(new Date().toISOString().replace('T', ' ').sli
 let meta
 async function loadMeta() {
   if (meta) return meta
-  if (!cfg.router) throw new Error('Set BUYBACK_ROUTER to the DEX router address. Run "detect <txhash>" on a $LARRY buy to find it.')
-  if (cfg.dex !== 'v2' && cfg.dex !== 'v3') throw new Error('BUYBACK_DEX must be v2 or v3')
+  if (!['0x', 'v2', 'v3'].includes(cfg.dex)) throw new Error('BUYBACK_ROUTE must be 0x, v2 or v3')
+  if (cfg.dex === '0x') {
+    if (!cfg.contract) throw new Error('The 0x route needs BUYBACK_CONTRACT (the LarryBuyback contract).')
+    if (!cfg.zeroxKey) throw new Error('Set BUYBACK_0X_API_KEY (free at dashboard.0x.org).')
+  }
+  if (cfg.contract && cfg.pay !== 'eth') throw new Error('The LarryBuyback contract spends ETH: set BUYBACK_PAY=eth.')
+  if (cfg.dex !== '0x' && !cfg.router) throw new Error('Set BUYBACK_ROUTER to the DEX router address, or use BUYBACK_ROUTE=0x with a contract.')
   if (cfg.dex === 'v3' && !cfg.quoter) throw new Error('Set BUYBACK_QUOTER (the DEX QuoterV2) for v3')
-  const weth = await pub.readContract({ address: cfg.router, abi: cfg.dex === 'v2' ? V2 : V3_ROUTER, functionName: cfg.dex === 'v2' ? 'WETH' : 'WETH9' })
+  const weth = cfg.dex === '0x' ? NATIVE : await pub.readContract({ address: cfg.router, abi: cfg.dex === 'v2' ? V2 : V3_ROUTER, functionName: cfg.dex === 'v2' ? 'WETH' : 'WETH9' })
   const payToken = cfg.pay === 'eth' ? weth : cfg.pay
   const payDecimals = cfg.pay === 'eth' ? 18 : await pub.readContract({ address: payToken, abi: erc20Abi, functionName: 'decimals' })
   const paySymbol = cfg.pay === 'eth' ? 'ETH' : await pub.readContract({ address: payToken, abi: erc20Abi, functionName: 'symbol' })
@@ -121,7 +148,18 @@ const toPay = (v) => parseUnits(String(v), meta.payDecimals)
 const fmtPay = (v) => `${Number(formatUnits(v, meta.payDecimals)).toPrecision(4)} ${meta.paySymbol}`
 const fmtLarry = (v) => `${Math.round(Number(formatUnits(v, meta.larryDecimals))).toLocaleString('en-US')} LARRY`
 
+/** 0x quote with the buyback contract as taker: returns the call the contract makes. */
+async function zeroxQuote(amountIn) {
+  const q = new URLSearchParams({ chainId: String(chain.id), sellToken: NATIVE, buyToken: cfg.larry, sellAmount: amountIn.toString(), taker: cfg.contract, slippageBps: cfg.slippageBps.toString() })
+  const res = await fetch(`${cfg.zeroxUrl}/swap/allowance-holder/quote?${q}`, { headers: { '0x-api-key': cfg.zeroxKey, '0x-version': 'v2' } })
+  const j = await res.json().catch(() => ({}))
+  if (!res.ok) throw new Error(`0x: ${j.message ?? j.name ?? res.status}${j.data?.details ? ` ${JSON.stringify(j.data.details)}` : ''}`)
+  if (j.liquidityAvailable === false || !j.transaction) throw new Error('0x found no route for this amount')
+  return { target: getAddress(j.transaction.to), data: j.transaction.data, value: BigInt(j.transaction.value ?? amountIn), out: BigInt(j.buyAmount), minOut: BigInt(j.minBuyAmount) }
+}
+
 async function quote(amountIn) {
+  if (cfg.dex === '0x') return (await zeroxQuote(amountIn)).out
   if (cfg.dex === 'v2') {
     const amounts = await pub.readContract({ address: cfg.router, abi: V2, functionName: 'getAmountsOut', args: [amountIn, meta.route] })
     return amounts.at(-1)
@@ -135,14 +173,14 @@ async function quote(amountIn) {
   return result[0]
 }
 
-function swapRequest(account, amountIn, minOut) {
+function swapRequest(account, amountIn, minOut, to = DEAD) {
   const deadline = BigInt(Math.floor(Date.now() / 1000) + 120)
   if (cfg.dex === 'v2') {
     return cfg.pay === 'eth'
-      ? { account, address: cfg.router, abi: V2, functionName: 'swapExactETHForTokensSupportingFeeOnTransferTokens', args: [minOut, meta.route, DEAD, deadline], value: amountIn }
-      : { account, address: cfg.router, abi: V2, functionName: 'swapExactTokensForTokensSupportingFeeOnTransferTokens', args: [amountIn, minOut, meta.route, DEAD, deadline] }
+      ? { account, address: cfg.router, abi: V2, functionName: 'swapExactETHForTokensSupportingFeeOnTransferTokens', args: [minOut, meta.route, to, deadline], value: amountIn }
+      : { account, address: cfg.router, abi: V2, functionName: 'swapExactTokensForTokensSupportingFeeOnTransferTokens', args: [amountIn, minOut, meta.route, to, deadline] }
   }
-  const params = { tokenIn: meta.payToken, tokenOut: cfg.larry, fee: cfg.fee, recipient: DEAD, deadline, amountIn, amountOutMinimum: minOut, sqrtPriceLimitX96: 0n }
+  const params = { tokenIn: meta.payToken, tokenOut: cfg.larry, fee: cfg.fee, recipient: to, deadline, amountIn, amountOutMinimum: minOut, sqrtPriceLimitX96: 0n }
   return { account, address: cfg.router, abi: V3_ROUTER, functionName: 'exactInputSingle', args: [params], value: cfg.pay === 'eth' ? amountIn : 0n }
 }
 
@@ -162,8 +200,19 @@ const saveState = (s) => fs.writeFileSync(cfg.stateFile, JSON.stringify(s, null,
 async function check() {
   await loadMeta()
   const account = cfg.key ? privateKeyToAccount(cfg.key.startsWith('0x') ? cfg.key : `0x${cfg.key}`) : null
-  console.log('DEX        ', cfg.dex, cfg.router, cfg.dex === 'v3' ? `fee ${cfg.fee} quoter ${cfg.quoter}` : '')
-  console.log('Route      ', meta.route.join(' -> '))
+  console.log('Route      ', cfg.dex, cfg.dex === '0x' ? cfg.zeroxUrl : cfg.router, cfg.dex === 'v3' ? `fee ${cfg.fee} quoter ${cfg.quoter}` : '')
+  if (cfg.contract) {
+    const [held, left, perBuy, keeper, paused, burned, buys] = await Promise.all([
+      pub.getBalance({ address: cfg.contract }),
+      ...['leftToday', 'maxPerBuy', 'keeper', 'paused', 'totalBurned', 'buys'].map((f) => pub.readContract({ address: cfg.contract, abi: BUYBACK, functionName: f })),
+    ])
+    console.log('Contract   ', cfg.contract, `${formatEther(held)} ETH, ${formatEther(left)} ETH left today, max ${formatEther(perBuy)} a buy, keeper ${keeper}${paused ? ', PAUSED' : ''}`)
+    console.log('Burned     ', `${fmtLarry(burned)} in ${buys} buys so far`)
+    const target = cfg.dex === '0x' ? (await zeroxQuote(toPay(cfg.perBuy))).target : cfg.router
+    const ok = await pub.readContract({ address: cfg.contract, abi: BUYBACK, functionName: 'allowedTarget', args: [target] })
+    console.log('Target     ', target, ok ? 'allowed' : 'NOT ALLOWED: the owner must call setTarget(target, true)')
+  }
+  if (cfg.dex !== '0x') console.log('Path       ', meta.route.join(' -> '))
   console.log('Spend      ', `${cfg.perBuy} ${meta.paySymbol} every ${cfg.everySec}s (±${cfg.jitter * 100}%), at most ${cfg.maxPerDay} ${meta.paySymbol} a day`)
   console.log('Burns to   ', DEAD)
   const q = await quote(toPay(cfg.perBuy))
@@ -201,7 +250,8 @@ async function run() {
   await loadMeta()
   const account = privateKeyToAccount(cfg.key.startsWith('0x') ? cfg.key : `0x${cfg.key}`)
   const wallet = createWalletClient({ account, chain, transport: http(cfg.rpc) })
-  const maxDay = toPay(cfg.maxPerDay)
+  // With a contract its own daily cap is the one that counts.
+  const maxDay = cfg.contract ? maxUint256 / 2n : toPay(cfg.maxPerDay)
   const base = toPay(cfg.perBuy)
   const minGas = parseEther(cfg.minGas)
   log(`buyback wallet ${account.address}, ${cfg.perBuy} ${meta.paySymbol} every ${cfg.everySec}s, max ${cfg.maxPerDay} ${meta.paySymbol} a day${cfg.dryRun ? ', DRY RUN' : ''}`)
@@ -213,6 +263,13 @@ async function run() {
       await pub.waitForTransactionReceipt({ hash })
       log(`approved ${meta.paySymbol} for the router`)
     }
+  }
+
+  if (cfg.contract) {
+    const [keeper, paused] = await Promise.all(['keeper', 'paused'].map((f) => pub.readContract({ address: cfg.contract, abi: BUYBACK, functionName: f })))
+    if (keeper.toLowerCase() !== account.address.toLowerCase()) log(`warning: the contract's keeper is ${keeper}, not this wallet; buys will revert unless this wallet is the owner`)
+    if (paused) log('warning: the buyback contract is paused')
+    log(`buying through LarryBuyback ${cfg.contract} via ${cfg.dex}`)
   }
 
   let stop = false
@@ -228,7 +285,23 @@ async function run() {
       let amountIn = (base * BigInt(Math.round(r * 1e6))) / 1_000_000n
       if (spent + amountIn > maxDay) amountIn = maxDay - spent
       const eth = await pub.getBalance({ address: account.address, blockTag: 'latest' })
-      if (amountIn <= 0n) log(`daily budget of ${cfg.maxPerDay} ${meta.paySymbol} used, waiting for tomorrow (UTC)`)
+      if (cfg.contract && amountIn > 0n) {
+        const [left, perBuy, held] = await Promise.all([
+          pub.readContract({ address: cfg.contract, abi: BUYBACK, functionName: 'leftToday' }),
+          pub.readContract({ address: cfg.contract, abi: BUYBACK, functionName: 'maxPerBuy' }),
+          pub.getBalance({ address: cfg.contract }),
+        ])
+        for (const cap of [left, perBuy, held]) if (amountIn > cap) amountIn = cap
+        if (amountIn <= 0n) {
+          log(held === 0n ? 'the buyback contract has no ETH left, send ETH to it' : "the contract's daily limit is used, waiting for tomorrow (UTC)")
+          throw null
+        }
+        if (eth < minGas) {
+          log(`low ETH for gas (${formatEther(eth)}), top up the keeper wallet`)
+          throw null
+        }
+        await contractBuy(account, wallet, amountIn, s, spent)
+      } else if (amountIn <= 0n) log(`daily budget of ${cfg.maxPerDay} ${meta.paySymbol} used, waiting for tomorrow (UTC)`)
       else if (eth < minGas + (cfg.pay === 'eth' ? amountIn : 0n)) log(`low ETH (${formatEther(eth)}), top up the buyback wallet`)
       else {
         const out = await quote(amountIn)
@@ -253,12 +326,49 @@ async function run() {
         }
       }
     } catch (e) {
-      log('buy skipped:', e.shortMessage ?? e.message)
+      if (e) log('buy skipped:', e.shortMessage ?? e.message)
     }
     if (maxRuns && n >= maxRuns) break
     const wait = cfg.everySec * 1000 - (Date.now() - started)
     if (wait > 0 && !stop) await new Promise((res) => setTimeout(res, wait))
   }
+}
+
+/** One buy through the LarryBuyback contract: it swaps its own ETH and burns everything it receives. */
+async function contractBuy(account, wallet, amountIn, s, spent) {
+  let target, data, value, out, minOut
+  if (cfg.dex === '0x') ({ target, data, value, out, minOut } = await zeroxQuote(amountIn))
+  else {
+    out = await quote(amountIn)
+    minOut = (out * (10_000n - cfg.slippageBps)) / 10_000n
+    const req = swapRequest(account, amountIn, minOut, cfg.contract)
+    target = req.address
+    data = encodeFunctionData({ abi: req.abi, functionName: req.functionName, args: req.args })
+    value = amountIn
+  }
+  const allowed = await pub.readContract({ address: cfg.contract, abi: BUYBACK, functionName: 'allowedTarget', args: [target] })
+  if (!allowed) throw new Error(`${target} is not an allowed target on the buyback contract; the owner must allow it (setTarget)`)
+  const { request } = await pub.simulateContract({ account, address: cfg.contract, abi: BUYBACK, functionName: 'buyAndBurn', args: [target, data, value, minOut] })
+  if (cfg.dryRun) return log(`dry run: ${fmtPay(value)} would buy and burn about ${fmtLarry(out)}`)
+  const hash = await wallet.writeContract(request)
+  const rcpt = await pub.waitForTransactionReceipt({ hash })
+  if (rcpt.status !== 'success') throw new Error(`buy reverted ${hash}`)
+  let burned = out
+  let ethSpent = value
+  for (const l of rcpt.logs) {
+    if (l.address.toLowerCase() !== cfg.contract.toLowerCase()) continue
+    try {
+      const ev = decodeEventLog({ abi: BUYBACK, data: l.data, topics: l.topics })
+      if (ev.eventName === 'BoughtAndBurned') ({ larryBurned: burned, ethSpent } = ev.args)
+    } catch {}
+  }
+  s.spent = (spent + ethSpent).toString()
+  s.buys += 1
+  s.burned = (BigInt(s.burned) + burned).toString()
+  s.totalBuys += 1
+  s.totalBurned = (BigInt(s.totalBurned) + burned).toString()
+  saveState(s)
+  log(`🔥 bought and burned ${fmtLarry(burned)} for ${fmtPay(ethSpent)}  ${cfg.explorer}/tx/${hash}`)
 }
 
 const [cmd, arg] = process.argv.slice(2)
